@@ -16,6 +16,8 @@
 #include "prompt.h"
 #include "settings.h"
 
+#include "dbcomm_time_instr.h"  // jason: add logger
+
 /* callback functions for our flex lexer */
 const PsqlScanCallbacks psqlscan_callbacks = {
 	psql_get_variable,
@@ -53,6 +55,9 @@ MainLoop(FILE *source)
 	FILE	   *prev_cmd_source;
 	bool		prev_cmd_interactive;
 	uint64		prev_lineno;
+
+	// jason: add logger init
+	logger_init(_NUM_TIMING_SPOTS, timing_spot_names);
 
 	/* Save the prior command source */
 	prev_cmd_source = pset.cur_cmd_source;
@@ -437,6 +442,8 @@ MainLoop(FILE *source)
 				if (conditional_active(cond_stack))
 				{
 					success = SendQuery(query_buf->data);
+					// jason: print out timing stats here
+					logger_print_timings();
 					slashCmdStatus = success ? PSQL_CMD_SEND : PSQL_CMD_ERROR;
 					pset.stmt_lineno = 1;
 

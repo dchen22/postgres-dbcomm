@@ -30,6 +30,9 @@
 #include "portability/instr_time.h"
 #include "settings.h"
 
+// jason: add logger
+#include "dbcomm_time_instr.h"
+
 static bool DescribeQuery(const char *query, double *elapsed_msec);
 static int	ExecQueryAndProcessResults(const char *query,
 									   double *elapsed_msec,
@@ -1125,6 +1128,9 @@ SendQuery(const char *query)
 	bool		on_error_rollback_savepoint = false;
 	bool		svpt_gone = false;
 
+	// jason: timing start
+	timing_start(SendQuery_func); // Use the correct enum value for timing spot
+
 	if (!pset.db)
 	{
 		pg_log_error("You are currently not connected to a database.");
@@ -1334,6 +1340,7 @@ sendquery_cleanup:
 		pset.ctv_args[i] = NULL;
 	}
 
+	timing_end(SendQuery_func); // End timing for this spot
 	return OK;
 }
 
@@ -1568,6 +1575,8 @@ ExecQueryAndProcessResults(const char *query,
 	FILE	   *gfile_fout = NULL;
 	bool		gfile_is_pipe = false;
 
+	timing_start(ExecQueryAndProcessResults_func); // timing start
+
 	if (timing)
 		INSTR_TIME_SET_CURRENT(before);
 	else
@@ -1760,12 +1769,15 @@ ExecQueryAndProcessResults(const char *query,
 	}
 
 	/* first result */
+	timing_start(ExecQueryAndProcessResults_first_result); // timing start for first result
 	result = PQgetResult(pset.db);
 	if (min_rows > 0 && PQntuples(result) < min_rows)
 	{
 		return_early = true;
 	}
+	timing_end(ExecQueryAndProcessResults_first_result); // timing end for first result
 
+	timing_start(ExecQueryAndProcessResults_result_loop); // timing start for result loop
 	while (result != NULL)
 	{
 		ExecStatusType result_status;
@@ -2167,6 +2179,7 @@ ExecQueryAndProcessResults(const char *query,
 			break;
 		}
 	}
+	timing_end(ExecQueryAndProcessResults_result_loop); // timing end for result loop
 
 	/* close \g file if we opened it */
 	CloseGOutput(gfile_fout, gfile_is_pipe);
@@ -2189,6 +2202,9 @@ ExecQueryAndProcessResults(const char *query,
 
 	if (cancel_pressed || return_early)
 		return 0;
+
+	timing_end(ExecQueryAndProcessResults_func); // timing end
+	log_message("end of ExecQueryAndProcessResults");
 
 	return success ? 1 : -1;
 }
