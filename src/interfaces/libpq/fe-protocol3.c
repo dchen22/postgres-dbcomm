@@ -383,7 +383,10 @@ pqParseInput3(PGconn *conn)
 						 conn->result->resultStatus == PGRES_TUPLES_CHUNK))
 					{
 						/* Read another tuple of a normal query response */
-						if (getAnotherTuple(conn, msgLength))
+						timing_start(getAnotherTuple_func); // timing start for deserializing
+						bool getAnotherTupleFlag = getAnotherTuple(conn, msgLength);
+						timing_end(getAnotherTuple_func); // timing start for deserializing
+						if (getAnotherTupleFlag)
 							return;
 					}
 					else if (conn->error_result ||

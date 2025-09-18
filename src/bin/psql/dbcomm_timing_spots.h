@@ -6,7 +6,11 @@
     X(ExecQueryAndProcessResults_func) \
     X(ExecQueryAndProcessResults_first_result) \
     X(ExecQueryAndProcessResults_result_loop) \
-    X(SomethingElseFunc)
+    X(SomethingElseFunc) \
+    X(PQsendQueryParams_func) \
+    X(PQsendPrepare_func) \
+    X(PQsendQueryPrepared_func) \
+    X(getAnotherTuple_func)
 
 // --- Use the list to generate the enum ---
 #define AS_ENUM(name) name,

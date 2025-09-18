@@ -1590,25 +1590,31 @@ ExecQueryAndProcessResults(const char *query,
 				pset.piped_commands++;
 			break;
 		case PSQL_SEND_EXTENDED_PARSE:
+			timing_start(PQsendPrepare_func); // timing start for serializing
 			success = PQsendPrepare(pset.db, pset.stmtName, query, 0, NULL);
+			timing_end(PQsendPrepare_func); // timing end for serializing
 			if (success && PQpipelineStatus(pset.db) != PQ_PIPELINE_OFF)
 				pset.piped_commands++;
 			break;
 		case PSQL_SEND_EXTENDED_QUERY_PARAMS:
 			Assert(pset.stmtName == NULL);
+			timing_start(PQsendQueryParams_func); // timing start for serializing
 			success = PQsendQueryParams(pset.db, query,
 										pset.bind_nparams, NULL,
 										(const char *const *) pset.bind_params,
 										NULL, NULL, 0);
+			timing_end(PQsendQueryParams_func); // timing end for serializing
 			if (success && PQpipelineStatus(pset.db) != PQ_PIPELINE_OFF)
 				pset.piped_commands++;
 			break;
 		case PSQL_SEND_EXTENDED_QUERY_PREPARED:
 			Assert(pset.stmtName != NULL);
+			timing_start(PQsendQueryPrepared_func); // timing start for pre-serializing send
 			success = PQsendQueryPrepared(pset.db, pset.stmtName,
 										  pset.bind_nparams,
 										  (const char *const *) pset.bind_params,
 										  NULL, NULL, 0);
+			timing_end(PQsendQueryPrepared_func); // timing end for pre-serializing send
 			if (success && PQpipelineStatus(pset.db) != PQ_PIPELINE_OFF)
 				pset.piped_commands++;
 			break;
