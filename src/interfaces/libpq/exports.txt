@@ -210,3 +210,9 @@ PQgetAuthDataHook         207
 PQdefaultAuthDataHook     208
 PQfullProtocolVersion     209
 appendPQExpBufferVA       210
+logger_init               211
+timing_start              212
+timing_end                213
+logger_print_timings      214
+log_message_internal      215
+logger_get_timing_spot_names 216

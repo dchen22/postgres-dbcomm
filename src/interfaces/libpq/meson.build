@@ -1,6 +1,7 @@
 # Copyright (c) 2022-2025, PostgreSQL Global Development Group
 
 libpq_sources = files(
+  'dbcomm_time_instr.c',
   'fe-auth-oauth.c',
   'fe-auth-scram.c',
   'fe-auth.c',
@@ -59,7 +60,7 @@ libpq_so_c_args = ['-DUSE_DYNAMIC_OAUTH']
 # to the library on windows or breaks precompiled headers).
 libpq_st = static_library('libpq',
   libpq_sources,
-  include_directories: [libpq_inc],
+  include_directories: [libpq_inc], #, postgres_inc
   c_args: libpq_c_args,
   c_pch: pch_postgres_fe_h,
   dependencies: [frontend_stlib_code, libpq_deps],

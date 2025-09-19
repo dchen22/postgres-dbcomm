@@ -31,7 +31,7 @@
 #include "settings.h"
 
 // jason: add logger
-#include "dbcomm_time_instr.h"
+#include "libpq/dbcomm_time_instr.h"
 
 static bool DescribeQuery(const char *query, double *elapsed_msec);
 static int	ExecQueryAndProcessResults(const char *query,
