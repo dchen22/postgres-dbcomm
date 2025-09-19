@@ -1,16 +1,23 @@
-#include "dbcomm_time_instr.h"
+#include "postgres_fe.h"
+
+#include "libpq/dbcomm_time_instr.h"
 
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
 #include <sys/time.h> // For gettimeofday in log_message
 
+#include "libpq/dbcomm_timing_spots.h"
 
-#include "dbcomm_timing_spots.h"
-
-const char* timing_spot_names[_NUM_TIMING_SPOTS] = {
+static const char *const timing_spot_names[_NUM_TIMING_SPOTS] = {
     TIMING_SPOTS(AS_STRING)
 };
+
+const char *const *
+logger_get_timing_spot_names(void)
+{
+    return timing_spot_names;
+}
 
 // Internal structure to hold data for a single timer
 typedef struct {
@@ -122,4 +129,3 @@ void log_message_internal(const char* file, int line, const char* format, ...) {
     va_end(args);
     printf("\n");
 }
-

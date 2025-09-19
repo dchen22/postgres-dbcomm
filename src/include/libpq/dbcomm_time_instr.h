@@ -67,6 +67,11 @@ void timing_end(int timer_id);
  */
 void logger_print_timings(void);
 
+/**
+ * @brief Returns the static list of timing spot names used to initialize the logger.
+ */
+const char *const *logger_get_timing_spot_names(void);
+
 
 /**
  * @brief The internal implementation of the logger. Do not call this directly.
@@ -87,4 +92,3 @@ void log_message_internal(const char* file, int line, const char* format, ...);
 
 
 #endif // LOGGER_H
-

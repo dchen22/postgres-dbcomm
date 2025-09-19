@@ -14,8 +14,6 @@ psql_sources = files(
   'startup.c',
   'stringutils.c',
   'variables.c',
-  # jason: add logger
-  'dbcomm_time_instr.c',
 )
 
 psqlscanslash = custom_target('psqlscanslash',

@@ -16,7 +16,7 @@
 #include "prompt.h"
 #include "settings.h"
 
-#include "dbcomm_time_instr.h"  // jason: add logger
+#include "libpq/dbcomm_time_instr.h"  // jason: add logger
 
 /* callback functions for our flex lexer */
 const PsqlScanCallbacks psqlscan_callbacks = {
@@ -57,7 +57,7 @@ MainLoop(FILE *source)
 	uint64		prev_lineno;
 
 	// jason: add logger init
-	logger_init(_NUM_TIMING_SPOTS, timing_spot_names);
+	logger_init(_NUM_TIMING_SPOTS, logger_get_timing_spot_names());
 
 	/* Save the prior command source */
 	prev_cmd_source = pset.cur_cmd_source;

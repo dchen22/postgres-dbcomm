@@ -18,5 +18,3 @@ typedef enum {
 
 // --- Use the same list to generate the names array ---
 #define AS_STRING(name) #name,
-
-extern const char* timing_spot_names[_NUM_TIMING_SPOTS];
