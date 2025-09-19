@@ -63,6 +63,7 @@
 #include "utils/rls.h"
 #include "utils/snapmgr.h"
 
+#include "../../common/backend_time_instr.h" // jason: add timing
 
 /* Hooks for plugins to get control in ExecutorStart/Run/Finish/End */
 ExecutorStart_hook_type ExecutorStart_hook = NULL;
@@ -1720,14 +1721,21 @@ ExecutePlan(QueryDesc *queryDesc,
 		 */
 		if (sendTuples)
 		{
-			/*
-			 * If we are not able to send the tuple, we assume the destination
-			 * has closed and no more tuples can be sent. If that's the case,
-			 * end the loop.
-			 */
-			if (!dest->receiveSlot(slot, dest))
-				break;
-		}
+            /*
+             * If we are not able to send the tuple, we assume the destination
+             * has closed and no more tuples can be sent. If that's the case,
+             * end the loop.
+             */
+
+            // jason: measure printtup here
+            timing_start(Printtup);
+            if (!dest->receiveSlot(slot, dest))
+            {
+                timing_end(Printtup);
+                break;
+            }
+            timing_end(Printtup);
+        }
 
 		/*
 		 * Count tuples processed, if this is a SELECT.  (For other operation

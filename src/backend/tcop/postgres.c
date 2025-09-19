@@ -22,10 +22,11 @@
 #include <fcntl.h>
 #include <limits.h>
 #include <signal.h>
-#include <unistd.h>
+#include <stdio.h>
 #include <sys/resource.h>
 #include <sys/socket.h>
 #include <sys/time.h>
+#include <unistd.h>
 
 #ifdef USE_VALGRIND
 #include <valgrind/valgrind.h>
@@ -80,6 +81,9 @@
 #include "utils/timeout.h"
 #include "utils/timestamp.h"
 #include "utils/varlena.h"
+
+// jason: for timing and logging
+#include "../../common/backend_time_instr.h"
 
 /* ----------------
  *		global variables
@@ -1019,10 +1023,17 @@ exec_simple_query(const char *query_string)
 	bool		use_implicit_block;
 	char		msec_str[32];
 
-	/*
-	 * Report query to various monitoring facilities.
-	 */
-	debug_query_string = query_string;
+    // jason: init timing and logging
+    printf("init timing and logging\n");
+    logger_init(_NUM_TIMING_SPOTS, timing_spot_names);
+
+    // jason: time e2e query
+    timing_start(ExecSimpleQuery);
+
+    /*
+     * Report query to various monitoring facilities.
+     */
+    debug_query_string = query_string;
 
 	pgstat_report_activity(STATE_RUNNING, query_string);
 
@@ -1052,10 +1063,13 @@ exec_simple_query(const char *query_string)
 	 */
 	drop_unnamed_stmt();
 
-	/*
-	 * Switch to appropriate context for constructing parsetrees.
-	 */
-	oldcontext = MemoryContextSwitchTo(MessageContext);
+    // jason: time parsing
+    timing_start(ParseQuery);
+
+    /*
+     * Switch to appropriate context for constructing parsetrees.
+     */
+    oldcontext = MemoryContextSwitchTo(MessageContext);
 
 	/*
 	 * Do basic parsing of the query or queries (this should be safe even if
@@ -1078,15 +1092,18 @@ exec_simple_query(const char *query_string)
 	 */
 	MemoryContextSwitchTo(oldcontext);
 
-	/*
-	 * For historical reasons, if multiple SQL statements are given in a
-	 * single "simple Query" message, we execute them as a single transaction,
-	 * unless explicit transaction control commands are included to make
-	 * portions of the list be separate transactions.  To represent this
-	 * behavior properly in the transaction machinery, we use an "implicit"
-	 * transaction block.
-	 */
-	use_implicit_block = (list_length(parsetree_list) > 1);
+    // jason: finish timing parsing
+    timing_end(ParseQuery);
+
+    /*
+     * For historical reasons, if multiple SQL statements are given in a
+     * single "simple Query" message, we execute them as a single transaction,
+     * unless explicit transaction control commands are included to make
+     * portions of the list be separate transactions.  To represent this
+     * behavior properly in the transaction machinery, we use an "implicit"
+     * transaction block.
+     */
+    use_implicit_block = (list_length(parsetree_list) > 1);
 
 	/*
 	 * Run through the raw parsetree(s) and process each one.
@@ -1106,8 +1123,11 @@ exec_simple_query(const char *query_string)
 		const char *cmdtagname;
 		size_t		cmdtaglen;
 
-		pgstat_report_query_id(0, true);
-		pgstat_report_plan_id(0, true);
+        // jason: time analyze rewrite (for each statement)
+        timing_start(QueryAnalyzeAndRewrite);
+
+        pgstat_report_query_id(0, true);
+        pgstat_report_plan_id(0, true);
 
 		/*
 		 * Get the command name for use in status display (it also becomes the
@@ -1188,32 +1208,42 @@ exec_simple_query(const char *query_string)
 
 		querytree_list = pg_analyze_and_rewrite_fixedparams(parsetree, query_string,
 															NULL, 0, NULL);
+        // jason: finish timing analyze rewrite
+        timing_end(QueryAnalyzeAndRewrite);
 
-		plantree_list = pg_plan_queries(querytree_list, query_string,
-										CURSOR_OPT_PARALLEL_OK, NULL);
+        // jason: time planning (for each statement)
+        timing_start(QueryPlanning);
 
-		/*
-		 * Done with the snapshot used for parsing/planning.
-		 *
-		 * While it looks promising to reuse the same snapshot for query
-		 * execution (at least for simple protocol), unfortunately it causes
-		 * execution to use a snapshot that has been acquired before locking
-		 * any of the tables mentioned in the query.  This creates user-
-		 * visible anomalies, so refrain.  Refer to
-		 * https://postgr.es/m/flat/5075D8DF.6050500@fuzzy.cz for details.
-		 */
-		if (snapshot_set)
+        plantree_list = pg_plan_queries(querytree_list, query_string, CURSOR_OPT_PARALLEL_OK, NULL);
+
+        /*
+         * Done with the snapshot used for parsing/planning.
+         *
+         * While it looks promising to reuse the same snapshot for query
+         * execution (at least for simple protocol), unfortunately it causes
+         * execution to use a snapshot that has been acquired before locking
+         * any of the tables mentioned in the query.  This creates user-
+         * visible anomalies, so refrain.  Refer to
+         * https://postgr.es/m/flat/5075D8DF.6050500@fuzzy.cz for details.
+         */
+        if (snapshot_set)
 			PopActiveSnapshot();
 
 		/* If we got a cancel signal in analysis or planning, quit */
-		CHECK_FOR_INTERRUPTS();
+        CHECK_FOR_INTERRUPTS();
 
-		/*
-		 * Create unnamed portal to run the query or queries in. If there
-		 * already is one, silently drop it.
-		 */
-		portal = CreatePortal("", true, true);
-		/* Don't display the portal in pg_cursors */
+        // jason: finish timing planning
+        timing_end(QueryPlanning);
+
+        // jason: time execution/running portal
+        timing_start(QueryExecution);
+
+        /*
+         * Create unnamed portal to run the query or queries in. If there
+         * already is one, silently drop it.
+         */
+        portal = CreatePortal("", true, true);
+        /* Don't display the portal in pg_cursors */
 		portal->visible = false;
 
 		/*
@@ -1281,9 +1311,15 @@ exec_simple_query(const char *query_string)
 
 		PortalDrop(portal, false);
 
-		if (lnext(parsetree_list, parsetree_item) == NULL)
-		{
-			/*
+        // jason: finish timing execution/running portal
+        timing_end(QueryExecution);
+
+        // jason: time final steps, put them under ending comms
+        timing_start(EndingComms);
+
+        if (lnext(parsetree_list, parsetree_item) == NULL)
+        {
+            /*
 			 * If this is the last parsetree of the query string, close down
 			 * transaction statement before reporting command-complete.  This
 			 * is so that any end-of-transaction errors are reported before
@@ -1295,8 +1331,8 @@ exec_simple_query(const char *query_string)
 			if (use_implicit_block)
 				EndImplicitTransactionBlock();
 			finish_xact_command();
-		}
-		else if (IsA(parsetree->stmt, TransactionStmt))
+        }
+        else if (IsA(parsetree->stmt, TransactionStmt))
 		{
 			/*
 			 * If this was a transaction control statement, commit it. We will
@@ -1338,14 +1374,17 @@ exec_simple_query(const char *query_string)
 		/* Now we may drop the per-parsetree context, if one was created. */
 		if (per_parsetree_context)
 			MemoryContextDelete(per_parsetree_context);
-	}							/* end loop over parsetrees */
 
-	/*
-	 * Close down transaction statement, if one is open.  (This will only do
-	 * something if the parsetree list was empty; otherwise the last loop
-	 * iteration already did it.)
-	 */
-	finish_xact_command();
+        // jason: finish timing final steps and ending comms (EndCommand)
+        timing_end(EndingComms);
+    } /* end loop over parsetrees */
+
+    /*
+     * Close down transaction statement, if one is open.  (This will only do
+     * something if the parsetree list was empty; otherwise the last loop
+     * iteration already did it.)
+     */
+    finish_xact_command();
 
 	/*
 	 * If there were no parsetrees, return EmptyQueryResponse message.
@@ -1378,6 +1417,12 @@ exec_simple_query(const char *query_string)
 	TRACE_POSTGRESQL_QUERY_DONE(query_string);
 
 	debug_query_string = NULL;
+
+    // jason: end of an e2e query
+    timing_end(ExecSimpleQuery);
+
+    // print the timing results
+    logger_print_timings();
 }
 
 /*

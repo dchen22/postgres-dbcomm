@@ -41,6 +41,7 @@
 #include "libpq/libpq.h"
 #include "libpq/pqformat.h"
 
+#include "../../common/backend_time_instr.h" // jason: add logger
 
 /* ----------------
  *		dummy DestReceiver functions
@@ -255,7 +256,9 @@ NullCommand(CommandDest dest)
 void
 ReadyForQuery(CommandDest dest)
 {
-	switch (dest)
+    // jason: this should be the last thing sent to the client for an executed query, put it under ending comms
+    timing_start(EndingComms);
+    switch (dest)
 	{
 		case DestRemote:
 		case DestRemoteExecute:
@@ -283,4 +286,6 @@ ReadyForQuery(CommandDest dest)
 		case DestExplainSerialize:
 			break;
 	}
+    // jason: end timing here
+    timing_end(EndingComms);
 }

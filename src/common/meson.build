@@ -38,6 +38,7 @@ common_sources = files(
   'username.c',
   'wait_error.c',
   'wchar.c',
+  'backend_time_instr.c',
 )
 
 if ssl.found()

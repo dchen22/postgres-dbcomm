@@ -1,11 +1,14 @@
-#include "dbcomm_time_instr.h"
-
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/time.h> // For gettimeofday in log_message
 
-#include "dbcomm_timing_spots.h"
+#include "./backend_time_instr.h"
+
+
+#include "postgres.h"
+
+#include "port.h" // for printf from PG
 
 const char *timing_spot_names[_NUM_TIMING_SPOTS] = {TIMING_SPOTS(AS_STRING)};
 

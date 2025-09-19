@@ -23,6 +23,7 @@
 #include "utils/memdebug.h"
 #include "utils/memutils.h"
 
+#include "../../../common/backend_time_instr.h" // jason: add logger
 
 static void printtup_startup(DestReceiver *self, int operation,
 							 TupleDesc typeinfo);
@@ -110,10 +111,13 @@ SetRemoteDestReceiverParams(DestReceiver *self, Portal portal)
 static void
 printtup_startup(DestReceiver *self, int operation, TupleDesc typeinfo)
 {
-	DR_printtup *myState = (DR_printtup *) self;
-	Portal		portal = myState->portal;
+    // jason: time printtup startup
+    timing_start(Printtup_Startup);
 
-	/*
+    DR_printtup *myState = (DR_printtup *)self;
+    Portal portal = myState->portal;
+
+    /*
 	 * Create I/O buffer to be used for all messages.  This cannot be inside
 	 * tmpcontext, since we want to re-use it across rows.
 	 */
@@ -139,16 +143,19 @@ printtup_startup(DestReceiver *self, int operation, TupleDesc typeinfo)
 								  FetchPortalTargetList(portal),
 								  portal->formats);
 
-	/* ----------------
-	 * We could set up the derived attr info at this time, but we postpone it
-	 * until the first call of printtup, for 2 reasons:
-	 * 1. We don't waste time (compared to the old way) if there are no
-	 *	  tuples at all to output.
-	 * 2. Checking in printtup allows us to handle the case that the tuples
-	 *	  change type midway through (although this probably can't happen in
-	 *	  the current executor).
-	 * ----------------
-	 */
+    /* ----------------
+     * We could set up the derived attr info at this time, but we postpone it
+     * until the first call of printtup, for 2 reasons:
+     * 1. We don't waste time (compared to the old way) if there are no
+     *	  tuples at all to output.
+     * 2. Checking in printtup allows us to handle the case that the tuples
+     *	  change type midway through (although this probably can't happen in
+     *	  the current executor).
+     * ----------------
+     */
+
+    // jason: end timing printtup startup
+    timing_end(Printtup_Startup);
 }
 
 /*
@@ -308,11 +315,14 @@ printtup(TupleTableSlot *slot, DestReceiver *self)
 	MemoryContext oldcontext;
 	StringInfo	buf = &myState->buf;
 	int			natts = typeinfo->natts;
-	int			i;
+    int i;
 
-	/* Set or update my derived attribute info, if needed */
-	if (myState->attrinfo != typeinfo || myState->nattrs != natts)
-		printtup_prepare_info(myState, typeinfo, natts);
+    /* // jason: time printtup
+    timing_start(Printtup); */
+
+    /* Set or update my derived attribute info, if needed */
+    if (myState->attrinfo != typeinfo || myState->nattrs != natts)
+        printtup_prepare_info(myState, typeinfo, natts);
 
 	/* Make sure the tuple is fully deconstructed */
 	slot_getallattrs(slot);
@@ -372,13 +382,19 @@ printtup(TupleTableSlot *slot, DestReceiver *self)
 		}
 	}
 
-	pq_endmessage_reuse(buf);
+    // jason: this is basically copying and potentially flushing the buffer to socket
+    timing_start(PQ_putmessage);
+    pq_endmessage_reuse(buf);
+    timing_end(PQ_putmessage);
 
-	/* Return to caller's context, and flush row's temporary memory */
+    /* Return to caller's context, and flush row's temporary memory */
 	MemoryContextSwitchTo(oldcontext);
-	MemoryContextReset(myState->tmpcontext);
+    MemoryContextReset(myState->tmpcontext);
 
-	return true;
+    /* // jason: end timing printtup
+    timing_end(Printtup); */
+
+    return true;
 }
 
 /* ----------------

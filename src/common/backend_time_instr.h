@@ -17,11 +17,11 @@
 #ifndef LOGGER_H
 #define LOGGER_H
 
-#include <stdio.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <time.h>
 
-#include "dbcomm_timing_spots.h"
+#include "./backend_timing_spots.h"
 
 // --- API ---
 
@@ -35,7 +35,7 @@
  * @param names An array of strings containing the names for each timer ID.
  * @return 0 on success, -1 on failure (e.g., memory allocation failed).
  */
-int logger_init(int num_timers, const char* names[]);
+int logger_init(int num_timers, const char *names[]);
 
 /**
  * @brief Records the start time for a specific timer ID.
@@ -71,7 +71,7 @@ void logger_cleanup();
  * @brief The internal implementation of the logger. Do not call this directly.
  * Use the log_message() macro instead.
  */
-void log_message_internal(const char* file, int line, const char* format, ...);
+void log_message_internal(const char *file, int line, const char *format, ...);
 
 /**
  * @brief Logs a general-purpose message, similar to printf.
@@ -84,6 +84,4 @@ void log_message_internal(const char* file, int line, const char* format, ...);
  */
 #define log_message(format, ...) log_message_internal(__FILE__, __LINE__, format, ##__VA_ARGS__)
 
-
 #endif // LOGGER_H
-
