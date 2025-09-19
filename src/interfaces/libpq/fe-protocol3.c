@@ -29,6 +29,9 @@
 #include "mb/pg_wchar.h"
 #include "port/pg_bswap.h"
 
+// jason: add logger
+#include "libpq/dbcomm_time_instr.h"
+
 /*
  * This macro lists the backend message types that could be "long" (more
  * than a couple of kilobytes).
