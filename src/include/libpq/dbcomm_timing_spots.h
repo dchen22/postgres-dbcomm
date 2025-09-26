@@ -10,7 +10,13 @@
     X(PQsendQueryParams_func) \
     X(PQsendPrepare_func) \
     X(PQsendQueryPrepared_func) \
-    X(getAnotherTuple_func)
+    X(getAnotherTuple_func) \
+    X(CopyFrom_overall) \
+    X(CopyFrom_putdata_loop) \
+    X(CopyFrom_putdata_single) \
+    X(CopyTo_overall) \
+    X(CopyTo_getdata_loop) \
+    X(CopyTo_getdata_single)
 
 // --- Use the list to generate the enum ---
 #define AS_ENUM(name) name,

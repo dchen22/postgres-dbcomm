@@ -19,6 +19,7 @@
 #include "common/logging.h"
 #include "copy.h"
 #include "libpq-fe.h"
+#include "libpq/dbcomm_time_instr.h"
 #include "pqexpbuffer.h"
 #include "prompt.h"
 #include "settings.h"
@@ -433,13 +434,18 @@ do_copy(const char *args)
 bool
 handleCopyOut(PGconn *conn, FILE *copystream, PGresult **res)
 {
+	timing_start(CopyTo_overall);
+
 	bool		OK = true;
 	char	   *buf;
 	int			ret;
 
+	timing_start(CopyTo_getdata_loop);
 	for (;;)
 	{
+		timing_start(CopyTo_getdata_single);
 		ret = PQgetCopyData(conn, &buf, 0);
+		timing_end(CopyTo_getdata_single);
 
 		if (ret < 0)
 			break;				/* done or server/connection error */
@@ -455,6 +461,8 @@ handleCopyOut(PGconn *conn, FILE *copystream, PGresult **res)
 			PQfreemem(buf);
 		}
 	}
+
+	timing_end(CopyTo_getdata_loop);
 
 	if (OK && copystream && fflush(copystream))
 	{
@@ -487,6 +495,7 @@ handleCopyOut(PGconn *conn, FILE *copystream, PGresult **res)
 		OK = false;
 	}
 
+	timing_end(CopyTo_overall);
 	return OK;
 }
 
@@ -542,6 +551,8 @@ handleCopyIn(PGconn *conn, FILE *copystream, bool isbinary, PGresult **res)
 	else
 		showprompt = false;
 
+	timing_start(CopyFrom_overall);
+
 	OK = true;
 
 	if (isbinary)
@@ -554,6 +565,8 @@ handleCopyIn(PGconn *conn, FILE *copystream, bool isbinary, PGresult **res)
 			fputs(prompt, stdout);
 			fflush(stdout);
 		}
+
+		timing_start(CopyFrom_putdata_loop);
 
 		for (;;)
 		{
@@ -569,12 +582,16 @@ handleCopyIn(PGconn *conn, FILE *copystream, bool isbinary, PGresult **res)
 			if (buflen <= 0)
 				break;
 
+			timing_start(CopyFrom_putdata_single);
 			if (PQputCopyData(conn, buf, buflen) <= 0)
 			{
+				timing_end(CopyFrom_putdata_single);
 				OK = false;
 				break;
 			}
+			timing_end(CopyFrom_putdata_single);
 		}
+		timing_end(CopyFrom_putdata_loop);
 	}
 	else
 	{
@@ -588,6 +605,7 @@ handleCopyIn(PGconn *conn, FILE *copystream, bool isbinary, PGresult **res)
 		 * the EOF marker, because if the data was inlined in a SQL script, we
 		 * would eat up the commands after the EOF marker.
 		 */
+		timing_start(CopyFrom_putdata_loop);
 		buflen = 0;
 		while (!copydone)
 		{
@@ -667,15 +685,19 @@ handleCopyIn(PGconn *conn, FILE *copystream, bool isbinary, PGresult **res)
 			 */
 			if (buflen >= COPYBUFSIZ - 5 || (copydone && buflen > 0))
 			{
+				timing_start(CopyFrom_putdata_single);
 				if (PQputCopyData(conn, buf, buflen) <= 0)
 				{
+					timing_end(CopyFrom_putdata_single);
 					OK = false;
 					break;
 				}
+				timing_end(CopyFrom_putdata_single);
 
 				buflen = 0;
 			}
 		}
+		timing_end(CopyFrom_putdata_loop);
 	}
 
 	/* Check for read error */
@@ -732,5 +754,6 @@ copyin_cleanup:
 		OK = false;
 	}
 
+	timing_end(CopyFrom_overall);
 	return OK;
 }
