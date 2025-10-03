@@ -1926,14 +1926,14 @@ pqGetCopyData3(PGconn *conn, char **buffer, int async)
 		timing_end(Deserializer_message_parse);
 		if (msgLength > 0)
 		{
-			timing_start(BufferMgr_allocate);
+			timing_start(BufferMgr_allocate_input);
 			*buffer = (char *) malloc(msgLength + 1);
 			if (*buffer == NULL)
 			{
 				libpq_append_conn_error(conn, "out of memory");
 				return -2;
 			}
-			timing_end(BufferMgr_allocate);
+			timing_end(BufferMgr_allocate_input);
 			
 			timing_start(Deserializer_data_extract);
 			memcpy(*buffer, &conn->inBuffer[conn->inCursor], msgLength);

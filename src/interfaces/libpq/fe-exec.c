@@ -2743,11 +2743,11 @@ PQputCopyData(PGconn *conn, const char *buffer, int nbytes)
 			if (pqFlush(conn) < 0)
 				return -1;
 			timing_end(BufferMgr_flush);
-			timing_start(BufferMgr_allocate);
+			timing_start(BufferMgr_realloc_output);
 			if (pqCheckOutBufferSpace(conn->outCount + 5 + (size_t) nbytes,
 									  conn))
 				return pqIsnonblocking(conn) ? 0 : -1;
-			timing_end(BufferMgr_allocate);
+			timing_end(BufferMgr_realloc_output);
 		}
 		else
 		{
@@ -2764,10 +2764,8 @@ PQputCopyData(PGconn *conn, const char *buffer, int nbytes)
 			return -1;
 		timing_end(BufferMgr_memcpy);
 		
-		timing_start(Serializer_copy_data_framing);
 		if (pqPutMsgEnd(conn) < 0)
 			return -1;
-		timing_end(Serializer_copy_data_framing);
 	}
 	return 1;
 }

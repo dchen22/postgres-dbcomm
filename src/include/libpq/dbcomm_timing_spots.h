@@ -17,15 +17,16 @@
     X(CopyTo_overall) \
     X(CopyTo_getdata_loop) \
     X(CopyTo_getdata_single) \
-    X(Connection_send_data) \
     X(Connection_recv_data) \
     X(Connection_parseInput) \
-    X(Serializer_copy_data_framing) \
+    X(Serializer_finalize_length) \
     X(Serializer_protocol_header) \
+    X(Connection_send_data) \
     X(Deserializer_message_parse) \
     X(Deserializer_data_extract) \
     X(BufferMgr_check_space) \
-    X(BufferMgr_allocate) \
+    X(BufferMgr_realloc_output) \
+    X(BufferMgr_allocate_input) \
     X(BufferMgr_flush) \
     X(BufferMgr_memcpy) \
     X(Session_getCopyDataMessage) \

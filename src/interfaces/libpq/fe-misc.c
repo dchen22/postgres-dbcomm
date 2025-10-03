@@ -47,6 +47,7 @@
 
 #include "libpq-fe.h"
 #include "libpq-int.h"
+#include "libpq/dbcomm_time_instr.h"
 #include "mb/pg_wchar.h"
 #include "pg_config_paths.h"
 #include "port/pg_bswap.h"
@@ -532,6 +533,7 @@ int
 pqPutMsgEnd(PGconn *conn)
 {
 	/* Fill in length word if needed */
+	timing_start(Serializer_finalize_length);
 	if (conn->outMsgStart >= 0)
 	{
 		uint32		msgLen = conn->outMsgEnd - conn->outMsgStart;
@@ -552,6 +554,7 @@ pqPutMsgEnd(PGconn *conn)
 
 	/* Make message eligible to send */
 	conn->outCount = conn->outMsgEnd;
+	timing_end(Serializer_finalize_length);
 
 	/* If appropriate, try to push out some data */
 	if (conn->outCount >= 8192)
@@ -583,8 +586,10 @@ pqPutMsgEnd(PGconn *conn)
 			toSend -= toSend % 8192;
 		}
 
+		timing_start(Connection_send_data);
 		if (pqSendSome(conn, toSend) < 0)
 			return EOF;
+		timing_end(Connection_send_data);
 		/* in nonblock mode, don't complain if unable to send it all */
 	}
 
