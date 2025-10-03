@@ -16,7 +16,20 @@
     X(CopyFrom_putdata_single) \
     X(CopyTo_overall) \
     X(CopyTo_getdata_loop) \
-    X(CopyTo_getdata_single)
+    X(CopyTo_getdata_single) \
+    X(Connection_send_data) \
+    X(Connection_recv_data) \
+    X(Connection_parseInput) \
+    X(Serializer_copy_data_framing) \
+    X(Serializer_protocol_header) \
+    X(Deserializer_message_parse) \
+    X(Deserializer_data_extract) \
+    X(BufferMgr_check_space) \
+    X(BufferMgr_allocate) \
+    X(BufferMgr_flush) \
+    X(BufferMgr_memcpy) \
+    X(Session_getCopyDataMessage) \
+    X(Session_putCopyData_prep)
 
 // --- Use the list to generate the enum ---
 #define AS_ENUM(name) name,

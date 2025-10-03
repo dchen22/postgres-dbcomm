@@ -26,6 +26,7 @@
 
 #include "libpq-fe.h"
 #include "libpq-int.h"
+#include "libpq/dbcomm_time_instr.h"
 #include "mb/pg_wchar.h"
 
 /* keep this in same order as ExecStatusType in libpq-fe.h */
@@ -2722,7 +2723,9 @@ PQputCopyData(PGconn *conn, const char *buffer, int nbytes)
 	 * input data into the input buffer happens down inside pqSendSome, but
 	 * it's not authorized to get rid of the data again.)
 	 */
+	timing_start(Connection_parseInput);
 	parseInput(conn);
+	timing_end(Connection_parseInput);
 
 	if (nbytes > 0)
 	{
@@ -2732,19 +2735,39 @@ PQputCopyData(PGconn *conn, const char *buffer, int nbytes)
 		 * data, return 0 in the nonblock case, else hard error. (For
 		 * simplicity, always assume 5 bytes of overhead.)
 		 */
+		timing_start(BufferMgr_check_space);
 		if ((conn->outBufSize - conn->outCount - 5) < nbytes)
 		{
+			timing_end(BufferMgr_check_space);
+			timing_start(BufferMgr_flush);
 			if (pqFlush(conn) < 0)
 				return -1;
+			timing_end(BufferMgr_flush);
+			timing_start(BufferMgr_allocate);
 			if (pqCheckOutBufferSpace(conn->outCount + 5 + (size_t) nbytes,
 									  conn))
 				return pqIsnonblocking(conn) ? 0 : -1;
+			timing_end(BufferMgr_allocate);
+		}
+		else
+		{
+			timing_end(BufferMgr_check_space);
 		}
 		/* Send the data (too simple to delegate to fe-protocol files) */
-		if (pqPutMsgStart(PqMsg_CopyData, conn) < 0 ||
-			pqPutnchar(buffer, nbytes, conn) < 0 ||
-			pqPutMsgEnd(conn) < 0)
+		timing_start(Serializer_protocol_header);
+		if (pqPutMsgStart(PqMsg_CopyData, conn) < 0)
 			return -1;
+		timing_end(Serializer_protocol_header);
+		
+		timing_start(BufferMgr_memcpy);
+		if (pqPutnchar(buffer, nbytes, conn) < 0)
+			return -1;
+		timing_end(BufferMgr_memcpy);
+		
+		timing_start(Serializer_copy_data_framing);
+		if (pqPutMsgEnd(conn) < 0)
+			return -1;
+		timing_end(Serializer_copy_data_framing);
 	}
 	return 1;
 }

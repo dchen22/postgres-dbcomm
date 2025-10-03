@@ -1898,7 +1898,9 @@ pqGetCopyData3(PGconn *conn, char **buffer, int async)
 		 * callers, we keep returning 0 until the next message is fully
 		 * available, even if it is not Copy Data.
 		 */
+		timing_start(Session_getCopyDataMessage);
 		msgLength = getCopyDataMessage(conn);
+		timing_end(Session_getCopyDataMessage);
 		if (msgLength < 0)
 			return msgLength;	/* end-of-copy or error */
 		if (msgLength == 0)
@@ -1907,9 +1909,11 @@ pqGetCopyData3(PGconn *conn, char **buffer, int async)
 			if (async)
 				return 0;
 			/* Need to load more data */
+			timing_start(Connection_recv_data);
 			if (pqWait(true, false, conn) ||
 				pqReadData(conn) < 0)
 				return -2;
+			timing_end(Connection_recv_data);
 			continue;
 		}
 
@@ -1917,20 +1921,27 @@ pqGetCopyData3(PGconn *conn, char **buffer, int async)
 		 * Drop zero-length messages (shouldn't happen anyway).  Otherwise
 		 * pass the data back to the caller.
 		 */
+		timing_start(Deserializer_message_parse);
 		msgLength -= 4;
+		timing_end(Deserializer_message_parse);
 		if (msgLength > 0)
 		{
+			timing_start(BufferMgr_allocate);
 			*buffer = (char *) malloc(msgLength + 1);
 			if (*buffer == NULL)
 			{
 				libpq_append_conn_error(conn, "out of memory");
 				return -2;
 			}
+			timing_end(BufferMgr_allocate);
+			
+			timing_start(Deserializer_data_extract);
 			memcpy(*buffer, &conn->inBuffer[conn->inCursor], msgLength);
 			(*buffer)[msgLength] = '\0';	/* Add terminating null */
 
 			/* Mark message consumed */
 			pqParseDone(conn, conn->inCursor + msgLength);
+			timing_end(Deserializer_data_extract);
 
 			return msgLength;
 		}
