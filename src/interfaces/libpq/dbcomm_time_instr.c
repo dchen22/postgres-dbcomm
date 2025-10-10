@@ -82,6 +82,39 @@ void logger_print_timings(void) {
         return;
     }
 
+    // Calculate communication stack timings before printing
+    // COPY FROM communication stack = sum of individual comm components
+    uint64_t copyfrom_comm_total = 
+        logger_state.stats[Connection_parseInput].total_ns +
+        logger_state.stats[Connection_send_data].total_ns +
+        logger_state.stats[BufferMgr_check_space].total_ns +
+        logger_state.stats[BufferMgr_flush].total_ns +
+        logger_state.stats[BufferMgr_realloc_output].total_ns +
+        logger_state.stats[BufferMgr_memcpy].total_ns +
+        logger_state.stats[Serializer_protocol_header].total_ns +
+        logger_state.stats[Serializer_finalize_length].total_ns;
+    
+    uint64_t copyfrom_comm_count = 1; // Single measurement for the entire operation
+    
+    // COPY TO communication stack = sum of individual comm components  
+    uint64_t copyto_comm_total =
+        logger_state.stats[Session_getCopyDataMessage].total_ns +
+        logger_state.stats[Connection_recv_data].total_ns +
+        logger_state.stats[Deserializer_message_parse].total_ns +
+        logger_state.stats[Deserializer_data_extract].total_ns +
+        logger_state.stats[BufferMgr_allocate_input].total_ns;
+        
+    uint64_t copyto_comm_count = 1; // Single measurement for the entire operation
+    
+    // Store the calculated values in the stats array
+    logger_state.stats[CopyFrom_comm_stack].total_ns = copyfrom_comm_total;
+    logger_state.stats[CopyFrom_comm_stack].count = copyfrom_comm_count;
+    logger_state.stats[CopyFrom_comm_stack].name = "CopyFrom_comm_stack";
+    
+    logger_state.stats[CopyTo_comm_stack].total_ns = copyto_comm_total;
+    logger_state.stats[CopyTo_comm_stack].count = copyto_comm_count;
+    logger_state.stats[CopyTo_comm_stack].name = "CopyTo_comm_stack";
+
     // Print header for nanosecond timing report
     printf("\n--- Timing Report (Nanoseconds) ---\n");
     printf("%-30s | %10s | %18s | %18s\n", "Timer Name", "Count", "Total Time (ns)", "Average Time (ns)");

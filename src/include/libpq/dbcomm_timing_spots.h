@@ -30,7 +30,9 @@
     X(BufferMgr_flush) \
     X(BufferMgr_memcpy) \
     X(Session_getCopyDataMessage) \
-    X(Session_putCopyData_prep)
+    X(Session_putCopyData_prep) \
+    X(CopyFrom_comm_stack) \
+    X(CopyTo_comm_stack)
 
 // --- Use the list to generate the enum ---
 #define AS_ENUM(name) name,
