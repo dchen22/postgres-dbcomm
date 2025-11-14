@@ -28,6 +28,9 @@
     X(SendCopyDataToPlacement_)                                                                                        \
     X(WriteTupleToLocal_)                                                                                              \
     X(DoLocalCopy_)                                                                                                    \
+    X(Receiver_CopyFrom)                                                                                               \
+    X(NextCopyFrom_)                                                                                                   \
+    X(CopyFromInsertIntoTable)                                                                                         \
                                                                                                                        \
     X(FetchIntermediate_)                                                                                              \
     X(FetchIntermediate_CopyData_)                                                                                     \

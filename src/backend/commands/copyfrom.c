@@ -45,6 +45,7 @@
 #include "rewrite/rewriteHandler.h"
 #include "storage/fd.h"
 #include "tcop/tcopprot.h"
+#include "time_instr.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
 #include "utils/portal.h"
@@ -1170,7 +1171,10 @@ CopyFrom(CopyFromState cstate)
 				skip_tuple = true;	/* "do nothing" */
 		}
 
-		if (!skip_tuple)
+        // jason: timing of inserting COPY data
+        timing_start(CopyFromInsertIntoTable);
+
+        if (!skip_tuple)
 		{
 			/*
 			 * If there is an INSTEAD OF INSERT ROW trigger, let it handle the
@@ -1237,7 +1241,8 @@ CopyFrom(CopyFromState cstate)
 					 * the buffer out to the table, as in single insert mode.
 					 * See CopyMultiInsertBufferFlush().
 					 */
-					continue;	/* next tuple please */
+                    timing_end(CopyFromInsertIntoTable);
+                    continue;	/* next tuple please */
 				}
 				else
 				{
@@ -1251,10 +1256,13 @@ CopyFrom(CopyFromState cstate)
 																				 myslot,
 																				 NULL);
 
-						if (myslot == NULL) /* "do nothing" */
-							continue;	/* next tuple please */
+                        if (myslot == NULL) /* "do nothing" */
+                        {
+                            timing_end(CopyFromInsertIntoTable);
+                            continue; /* next tuple please */
+                        }
 
-						/*
+                        /*
 						 * AFTER ROW Triggers might reference the tableoid
 						 * column, so (re-)initialize tts_tableOid before
 						 * evaluating them.
@@ -1295,7 +1303,8 @@ CopyFrom(CopyFromState cstate)
 			pgstat_progress_update_param(PROGRESS_COPY_TUPLES_PROCESSED,
 										 ++processed);
 		}
-	}
+        timing_end(CopyFromInsertIntoTable);
+    }
 
 	/* Flush any remaining buffered tuples */
 	if (insertMethod != CIM_SINGLE)

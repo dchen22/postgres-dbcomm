@@ -33,11 +33,14 @@
 #include "parser/parse_collate.h"
 #include "parser/parse_expr.h"
 #include "parser/parse_relation.h"
+#include "timing_spots.h"
 #include "utils/acl.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
 #include "utils/rls.h"
+
+#include "time_instr.h"
 
 /*
  *	 DoCopy executes the SQL COPY statement
@@ -303,8 +306,15 @@ DoCopy(ParseState *pstate, const CopyStmt *stmt,
 		cstate = BeginCopyFrom(pstate, rel, whereClause,
 							   stmt->filename, stmt->is_program,
 							   NULL, stmt->attlist, stmt->options);
-		*processed = CopyFrom(cstate);	/* copy from file to database */
-		EndCopyFrom(cstate);
+        // jason: timing of receiving COPY data
+        timing_start(Receiver_CopyFrom);
+
+        *processed = CopyFrom(cstate);	/* copy from file to database */
+
+        // jason: end timing of receiving COPY data
+        timing_end(Receiver_CopyFrom);
+
+        EndCopyFrom(cstate);
 	}
 	else
 	{
