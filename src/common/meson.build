@@ -40,6 +40,11 @@ common_sources = files(
   'wchar.c',
 )
 
+# Add instrumentation helpers so they are linked into libpgcommon variants.
+common_sources += files(
+  'time_instr.c',
+)
+
 if ssl.found()
   common_sources += files(
     'cryptohash_openssl.c',

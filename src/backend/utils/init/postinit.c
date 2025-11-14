@@ -54,6 +54,7 @@
 #include "storage/smgr.h"
 #include "storage/sync.h"
 #include "tcop/tcopprot.h"
+#include "timing_spots.h"
 #include "utils/acl.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
@@ -65,6 +66,8 @@
 #include "utils/snapmgr.h"
 #include "utils/syscache.h"
 #include "utils/timeout.h"
+
+#include "time_instr.h"
 
 static HeapTuple GetDatabaseTuple(const char *dbname);
 static HeapTuple GetDatabaseTupleByOid(Oid dboid);
@@ -748,18 +751,22 @@ InitPostgres(const char *in_dbname, Oid dboid,
 
 	elog(DEBUG3, "InitPostgres");
 
-	/*
-	 * Add my PGPROC struct to the ProcArray.
-	 *
-	 * Once I have done this, I am visible to other backends!
-	 */
-	InitProcessPhase2();
+    // jason: add init time instrumentation logger
+    logger_init(_NUM_TIMING_SPOTS, timing_spot_names);
+    log_message("InitPostgres: init logger\n");
 
-	/*
-	 * Initialize my entry in the shared-invalidation manager's array of
-	 * per-backend data.
-	 */
-	SharedInvalBackendInit(false);
+    /*
+     * Add my PGPROC struct to the ProcArray.
+     *
+     * Once I have done this, I am visible to other backends!
+     */
+    InitProcessPhase2();
+
+    /*
+     * Initialize my entry in the shared-invalidation manager's array of
+     * per-backend data.
+     */
+    SharedInvalBackendInit(false);
 
 	ProcSignalInit();
 

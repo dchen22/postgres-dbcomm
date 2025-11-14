@@ -18,6 +18,7 @@
  */
 
 #include "postgres.h"
+#include "timing_spots.h"
 
 #include <fcntl.h>
 #include <limits.h>
@@ -80,6 +81,8 @@
 #include "utils/timeout.h"
 #include "utils/timestamp.h"
 #include "utils/varlena.h"
+
+#include "time_instr.h"
 
 /* ----------------
  *		global variables
@@ -4758,7 +4761,9 @@ PostgresMain(const char *dbname, const char *username)
 					query_string = pq_getmsgstring(&input_message);
 					pq_getmsgend(&input_message);
 
-					if (am_walsender)
+                    // jason: timing the execution of a query (coordinator side should be full query time)
+                    timing_start(ExecSimpleQuery);
+                    if (am_walsender)
 					{
 						if (!exec_replication_command(query_string))
 							exec_simple_query(query_string);
@@ -4766,7 +4771,11 @@ PostgresMain(const char *dbname, const char *username)
 					else
 						exec_simple_query(query_string);
 
-					valgrind_report_error_query(query_string);
+                    // jason: end timing
+                    timing_end(ExecSimpleQuery);
+                    log_message("Query executed: %s", query_string);
+
+                    valgrind_report_error_query(query_string);
 
 					send_ready_for_query = true;
 				}
@@ -5012,7 +5021,9 @@ PostgresMain(const char *dbname, const char *username)
 						 errmsg("invalid frontend message type %d",
 								firstchar)));
 		}
-	}							/* end of input-reading loop */
+        // jason: print logger timings here (should be the end of executing a query/command)
+        logger_print_timings();
+    } /* end of input-reading loop */
 }
 
 /*

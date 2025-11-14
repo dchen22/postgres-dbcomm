@@ -19,10 +19,12 @@
 #include "libpq/pqformat.h"
 #include "libpq/protocol.h"
 #include "tcop/pquery.h"
+#include "timing_spots.h"
 #include "utils/lsyscache.h"
 #include "utils/memdebug.h"
 #include "utils/memutils.h"
 
+#include "time_instr.h"
 
 static void printtup_startup(DestReceiver *self, int operation,
 							 TupleDesc typeinfo);
@@ -310,7 +312,10 @@ printtup(TupleTableSlot *slot, DestReceiver *self)
 	int			natts = typeinfo->natts;
 	int			i;
 
-	/* Set or update my derived attribute info, if needed */
+    // jason: timing the printtup (send row) process
+    timing_start(Printtup);
+
+    /* Set or update my derived attribute info, if needed */
 	if (myState->attrinfo != typeinfo || myState->nattrs != natts)
 		printtup_prepare_info(myState, typeinfo, natts);
 
@@ -378,7 +383,10 @@ printtup(TupleTableSlot *slot, DestReceiver *self)
 	MemoryContextSwitchTo(oldcontext);
 	MemoryContextReset(myState->tmpcontext);
 
-	return true;
+    // jason: end timing
+    timing_end(Printtup);
+
+    return true;
 }
 
 /* ----------------
