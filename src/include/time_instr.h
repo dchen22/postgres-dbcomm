@@ -58,6 +58,23 @@ void timing_start(int timer_id);
 void timing_end(int timer_id);
 
 /**
+ * @brief Adds a value to a custom statistic for a specific timer.
+ *
+ * This function allows tracking additional metrics beyond just timing,
+ * such as bytes processed, bytes sent, etc. The stat is identified by
+ * an enum key (defined in custom_stats.h), and the value is accumulated.
+ *
+ * Example usage:
+ *   timing_add_stat(TIMER_NETWORK, STAT_TOTAL_BYTES_PROCESSED, 1024);
+ *   timing_add_stat(TIMER_NETWORK, STAT_TOTAL_BYTES_SENT, 512);
+ *
+ * @param timer_id The enum value of the timer to add the stat to.
+ * @param stat_key The custom_stat_key_t enum value for the stat.
+ * @param value The value to add to the stat (accumulated across calls).
+ */
+void timing_add_stat(int timer_id, int stat_key, uint64_t value);
+
+/**
  * @brief Prints a formatted report of all timing measurements and cleans up resources.
  *
  * Displays the name, call count, total time, and average time for each timer.

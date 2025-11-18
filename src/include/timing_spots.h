@@ -1,5 +1,24 @@
 #pragma once
 
+#include "./timing_custom_stats.h"
+
+#define VERBOSE_TIMING_SPOTS 1 // set to 1 to get more detailed timing spots
+
+/*
+ * Helper macros to conditionally emit verbose timing calls. Use
+ * verbose_timing_start(<spot>) and verbose_timing_end(<spot>).
+ */
+#ifndef verbose_timing_start
+#if VERBOSE_TIMING_SPOTS
+#define verbose_timing_start(spot) timing_start(spot)
+#define verbose_timing_end(spot) timing_end(spot)
+#else
+/* no-op when verbose timing is disabled */
+#define verbose_timing_start(spot) ((void)0)
+#define verbose_timing_end(spot) ((void)0)
+#endif
+#endif
+
 // TODO: add func/names for timing spots here
 /* Notes:
  * pull pair: FetchIntermediate_ & SendViaCopy_ sending/receiving intermediate results
@@ -10,6 +29,9 @@
 // DoCopyFromLocalTableIntoShards: the actual loop that copies data
 // CitusSendTupleToPlacements_: serializing and sending out the tuple
 // SendViaCopy_: calls FileReadCompat to read from file and just send
+//
+// RemoteFileDestReceiver_Init may include writing to local file, plus setting up connections
+//
 #define TIMING_SPOTS(X)                                                                                                \
     X(ExecSimpleQuery)                                                                                                 \
     X(ParseQuery)                                                                                                      \
@@ -33,12 +55,15 @@
     X(CopyFromInsertIntoTable)                                                                                         \
                                                                                                                        \
     X(FetchIntermediate_)                                                                                              \
-    X(FetchIntermediate_CopyData_)                                                                                     \
-    X(FetchIntermediate_File_)                                                                                         \
-    X(ReceiveViaCopy_)                                                                                                 \
+    X(FetchIntermediate_CopyAndWrite)                                                                                  \
+    X(FetchIntermediate_FileWrite)                                                                                     \
+                                                                                                                       \
     X(ReceiveAndWriteCopyData_)                                                                                        \
+    X(ReceiveAndWriteCopyData_Deser)                                                                                   \
+    X(ReceiveAndWriteCopyData_WriteFile)                                                                               \
     X(SendViaCopy_)                                                                                                    \
-    X(FileReadCompat_)                                                                                                 \
+    X(SendViaCopy_Send)                                                                                                \
+    X(SendViaCopy_FileRead)                                                                                            \
                                                                                                                        \
     X(ExecutePlanIntoColocatedIntermediateResults_)                                                                    \
     X(ExecutePlanIntoDestReceiver_)                                                                                    \
@@ -47,6 +72,12 @@
     X(ReceiveResults_Net)                                                                                              \
     X(ReceiveResults_Deserialize)                                                                                      \
     X(ReceiveResults_BuildTuples)                                                                                      \
+                                                                                                                       \
+    X(RemoteFileDestReceiver_Init)                                                                                     \
+    X(RemoteFileDestReceiver_SerAndSend)                                                                               \
+    X(RemoteFileDestReceiver_Ser)                                                                                      \
+    X(RemoteFileDestReceiver_Send)                                                                                     \
+    X(RemoteFileDestReceiver_SerAndSend_WriteLocal)                                                                    \
                                                                                                                        \
     X(ProcessCopyStmt_)                                                                                                \
     X(SomethingElseFunc)

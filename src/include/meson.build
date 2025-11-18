@@ -140,6 +140,7 @@ install_headers(
   'postgres_fe.h',
   'time_instr.h',
   'timing_spots.h',
+  'timing_custom_stats.h',
   'varatt.h',
   'windowapi.h',
   pg_config_ext,

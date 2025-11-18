@@ -10,6 +10,7 @@
 #include "port.h" // for printf from PG
 
 const char *timing_spot_names[_NUM_TIMING_SPOTS] = {TIMING_SPOTS(AS_STRING)};
+const char *custom_stat_names[_NUM_CUSTOM_STATS] = {CUSTOM_STATS(STATS_AS_STRING)};
 
 // Internal structure to hold data for a single timer
 typedef struct
@@ -18,6 +19,7 @@ typedef struct
     uint64_t total_ns;
     uint64_t count;
     struct timespec start_time;
+    uint64_t custom_stats[_NUM_CUSTOM_STATS]; // Array of custom statistics indexed by stat_key
 } timer_stat_t;
 
 // Global state for the logger
@@ -46,12 +48,39 @@ int logger_init(int num_timers, const char *names[])
 
     for (int i = 0; i < num_timers; ++i)
     {
+        int j;
         logger_state.stats[i].name = names[i] ? names[i] : "Unnamed Timer";
+        /* Initialize all custom stats to 0 */
+        for (j = 0; j < _NUM_CUSTOM_STATS; ++j)
+        {
+            logger_state.stats[i].custom_stats[j] = 0;
+        }
     }
 
     return 0;
 }
 
+/**
+ * @brief Adds a value to a custom statistic for a specific timer.
+ *
+ * This function allows tracking additional metrics beyond just timing,
+ * such as bytes processed, bytes sent, etc. The stat is identified by
+ * an enum key (defined in custom_stats.h), and the value is accumulated.
+ *
+ * @param timer_id The timer ID to add the stat to.
+ * @param stat_key The custom_stat_key_t enum value for the stat.
+ * @param value The value to add to the stat.
+ */
+void timing_add_stat(int timer_id, int stat_key, uint64_t value)
+{
+    if (timer_id < 0 || timer_id >= logger_state.num_timers || logger_state.stats == NULL)
+        return;
+
+    if (stat_key < 0 || stat_key >= _NUM_CUSTOM_STATS)
+        return;
+
+    logger_state.stats[timer_id].custom_stats[stat_key] += value;
+}
 void timing_start(int timer_id)
 {
     if (timer_id < 0 || timer_id >= logger_state.num_timers)
@@ -87,8 +116,10 @@ void logger_print_timings(void)
 
     // Print header for nanosecond timing report
     printf("\n--- Timing Report (Nanoseconds) ---\n");
-    printf("%-30s | %10s | %18s | %18s\n", "Timer Name", "Count", "Total Time (ns)", "Average Time (ns)");
-    printf("----------------------------------------------------------------------------------------\n");
+    printf("%-30s | %10s | %18s | %18s | %s\n", "Timer Name", "Count", "Total Time (ns)", "Average Time (ns)",
+           "Custom Stats");
+    printf("-----------------------------------------------------------------------------------------------------------"
+           "---\n");
 
     for (int i = 0; i < logger_state.num_timers; ++i)
     {
@@ -100,10 +131,29 @@ void logger_print_timings(void)
         uint64_t total_ns = stat->total_ns;
         uint64_t avg_ns = stat->count ? (stat->total_ns / stat->count) : 0;
 
-        printf("%-30s | %10llu | %18llu | %18llu\n", stat->name, (unsigned long long)stat->count,
+        printf("%-30s | %10llu | %18llu | %18llu | ", stat->name, (unsigned long long)stat->count,
                (unsigned long long)total_ns, (unsigned long long)avg_ns);
+
+        /* Print custom stats in comma-separated key=value format */
+        int first = 1;
+        int j;
+        for (j = 0; j < _NUM_CUSTOM_STATS; ++j)
+        {
+            /* Only print non-zero stats */
+            if (stat->custom_stats[j] > 0)
+            {
+                if (!first)
+                {
+                    printf(", ");
+                }
+                printf("%s=%llu", custom_stat_names[j], (unsigned long long)stat->custom_stats[j]);
+                first = 0;
+            }
+        }
+        printf("\n");
     }
-    printf("----------------------------------------------------------------------------------------\n");
+    printf("-----------------------------------------------------------------------------------------------------------"
+           "---\n");
 
     // free(logger_state.stats);
     // logger_state.stats = NULL;
