@@ -158,6 +158,9 @@ void logger_print_timings(void)
     free(logger_state.stats);
     logger_state.stats = NULL;
     logger_state.num_timers = 0;
+
+    // do logger init again just in case
+    logger_init(_NUM_TIMING_SPOTS, timing_spot_names);
 }
 
 void logger_cleanup()
