@@ -312,7 +312,8 @@ printtup(TupleTableSlot *slot, DestReceiver *self)
 	int			natts = typeinfo->natts;
 	int			i;
 
-    // jason: timing the printtup (send row) process
+    // jason: timing the printtup (send row) process for the adaptive executor (send half of ReceiveResults())
+    timing_add_stat(Printtup, STAT_TOTAL_ROWS_SENT, 1);
     timing_start(Printtup);
 
     /* Set or update my derived attribute info, if needed */
@@ -385,6 +386,7 @@ printtup(TupleTableSlot *slot, DestReceiver *self)
 
     // jason: end timing
     timing_end(Printtup);
+    timing_add_stat(Printtup, STAT_TOTAL_BYTES_SENT, buf->len);
 
     return true;
 }
