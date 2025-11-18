@@ -311,12 +311,15 @@ DoCopy(ParseState *pstate, const CopyStmt *stmt,
 
         *processed = CopyFrom(cstate);	/* copy from file to database */
 
+        EndCopyFrom(cstate);
+
         // jason: end timing of receiving COPY data
         timing_end(Receiver_CopyFrom);
 
-        EndCopyFrom(cstate);
-	}
-	else
+        // print timing results
+        logger_print_timings();
+    }
+    else
 	{
 		CopyToState cstate;
 
