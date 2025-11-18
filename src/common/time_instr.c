@@ -155,9 +155,9 @@ void logger_print_timings(void)
     printf("-----------------------------------------------------------------------------------------------------------"
            "---\n");
 
-    // free(logger_state.stats);
-    // logger_state.stats = NULL;
-    // logger_state.num_timers = 0;
+    free(logger_state.stats);
+    logger_state.stats = NULL;
+    logger_state.num_timers = 0;
 }
 
 void logger_cleanup()
