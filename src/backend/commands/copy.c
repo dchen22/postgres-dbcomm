@@ -315,9 +315,6 @@ DoCopy(ParseState *pstate, const CopyStmt *stmt,
 
         // jason: end timing of receiving COPY data
         timing_end(Receiver_CopyFrom);
-
-        // print timing results
-        logger_print_timings();
     }
     else
 	{
@@ -331,7 +328,10 @@ DoCopy(ParseState *pstate, const CopyStmt *stmt,
 	}
 
 	if (rel != NULL)
-		table_close(rel, NoLock);
+        table_close(rel, NoLock);
+
+    // print timing results for COPY
+    logger_print_timings();
 }
 
 /*
