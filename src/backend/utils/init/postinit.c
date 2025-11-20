@@ -753,7 +753,7 @@ InitPostgres(const char *in_dbname, Oid dboid,
 
     // jason: add init time instrumentation logger
     logger_init(_NUM_TIMING_SPOTS, timing_spot_names);
-    log_message("InitPostgres: init logger\n");
+    // log_message("InitPostgres: init logger\n");
 
     /*
      * Add my PGPROC struct to the ProcArray.

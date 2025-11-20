@@ -31,7 +31,8 @@
 // SendViaCopy_: calls FileReadCompat to read from file and just send
 //
 // RemoteFileDestReceiver_Init may include writing to local file, plus setting up connections
-//
+// ReceiveResults_HeapFormTuple happens during ReceiveResults_BuildTuples, and is a PG call, subtracting its time
+// reflects the rest of deserialzation time
 #define TIMING_SPOTS(X)                                                                                                \
     X(ExecSimpleQuery)                                                                                                 \
     X(ParseQuery)                                                                                                      \
@@ -72,6 +73,7 @@
     X(ReceiveResults_Net)                                                                                              \
     X(ReceiveResults_Deserialize)                                                                                      \
     X(ReceiveResults_BuildTuples)                                                                                      \
+    X(ReceiveResults_HeapFormTuple)                                                                                    \
                                                                                                                        \
     X(RemoteFileDestReceiver_Init)                                                                                     \
     X(RemoteFileDestReceiver_SerAndSend)                                                                               \
