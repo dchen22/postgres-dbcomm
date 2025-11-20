@@ -70,6 +70,8 @@
 #include "utils/lsyscache.h"
 #include "utils/typcache.h"
 
+#include "time_instr.h"
+
 static TupleDesc ExecTypeFromTLInternal(List *targetList,
 										bool skipjunk);
 static pg_attribute_always_inline void slot_deform_heap_tuple(TupleTableSlot *slot, HeapTuple tuple, uint32 *offp,
@@ -2260,9 +2262,12 @@ BuildTupleFromCStrings(AttInMetadata *attinmeta, char **values)
 	/*
 	 * Form a tuple
 	 */
-	tuple = heap_form_tuple(tupdesc, dvalues, nulls);
+    // jason: this is a PG function call
+    timing_start(ReceiveResults_HeapFormTuple);
+    tuple = heap_form_tuple(tupdesc, dvalues, nulls);
+    timing_end(ReceiveResults_HeapFormTuple);
 
-	/*
+    /*
 	 * Release locally palloc'd space.  XXX would probably be good to pfree
 	 * values of pass-by-reference datums, as well.
 	 */
