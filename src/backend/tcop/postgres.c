@@ -4804,10 +4804,14 @@ PostgresMain(const char *dbname, const char *username)
 					}
 					pq_getmsgend(&input_message);
 
-					exec_parse_message(query_string, stmt_name,
-									   paramTypes, numParams);
+                    // jason: log the prepared statement, Citus adaptive scan seems to go this path, using
+                    // StartPlacementExecutionOnSession which calls SendNextQuery
+                    log_message("PqMsg_Parse stmt_name: %s", stmt_name);
+                    log_message("PqMsg_Parse query: %s", query_string);
 
-					valgrind_report_error_query(query_string);
+                    exec_parse_message(query_string, stmt_name, paramTypes, numParams);
+
+                    valgrind_report_error_query(query_string);
 				}
 				break;
 
@@ -4840,7 +4844,10 @@ PostgresMain(const char *dbname, const char *username)
 					max_rows = pq_getmsgint(&input_message, 4);
 					pq_getmsgend(&input_message);
 
-					exec_execute_message(portal_name, max_rows);
+                    // jason: log PqMsg_Execute too
+                    log_message("PqMsg_Execute portal_name: %s", portal_name);
+                    // log_message("PqMsg_Execute max_rows: %d", max_rows);
+                    exec_execute_message(portal_name, max_rows);
 
 					/* exec_execute_message does valgrind_report_error_query */
 				}
