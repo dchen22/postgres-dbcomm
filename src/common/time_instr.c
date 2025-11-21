@@ -114,6 +114,20 @@ void logger_print_timings(void)
         return;
     }
 
+    /* If nothing has been recorded (no timer has a non-zero count),
+       do not print anything at all. */
+    int any_recorded = 0;
+    for (int i = 0; i < logger_state.num_timers; ++i)
+    {
+        if (logger_state.stats[i].count > 0)
+        {
+            any_recorded = 1;
+            break;
+        }
+    }
+    if (!any_recorded)
+        return;
+
     // Print header for nanosecond timing report
     printf("\n--- Timing Report (Nanoseconds) ---\n");
     printf("%-30s | %10s | %18s | %18s | %s\n", "Timer Name", "Count", "Total Time (ns)", "Average Time (ns)",
