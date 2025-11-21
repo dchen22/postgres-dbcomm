@@ -20,13 +20,14 @@
 #include "postgres.h"
 #include "timing_spots.h"
 
+#include <ctype.h>
 #include <fcntl.h>
 #include <limits.h>
 #include <signal.h>
-#include <unistd.h>
 #include <sys/resource.h>
 #include <sys/socket.h>
 #include <sys/time.h>
+#include <unistd.h>
 
 #ifdef USE_VALGRIND
 #include <valgrind/valgrind.h>
@@ -4749,7 +4750,10 @@ PostgresMain(const char *dbname, const char *username)
 		if (ignore_till_sync && firstchar != EOF)
 			continue;
 
-		switch (firstchar)
+        /* By default, we print logger timings after each loop iteration. */
+        bool skip_logger_print = false;
+
+        switch (firstchar)
 		{
 			case PqMsg_Query:
 				{
@@ -4760,6 +4764,22 @@ PostgresMain(const char *dbname, const char *username)
 
 					query_string = pq_getmsgstring(&input_message);
 					pq_getmsgend(&input_message);
+
+                    /*
+                     * If the query string (after skipping leading whitespace)
+                     * starts with "SELECT gid" or "SELECT waiting_pid",
+                     * then at the end of the loop we should not call
+                     * logger_print_timings(); instead call logger_reset().
+                     */
+                    {
+                        const char *qs = query_string;
+                        while (qs && *qs && isspace((unsigned char)*qs))
+                            qs++;
+                        if (qs && (strncmp(qs, "SELECT gid", 10) == 0 || strncmp(qs, "SELECT waiting_pid", 18) == 0))
+                            skip_logger_print = true;
+                        else
+                            skip_logger_print = false;
+                    }
 
                     // jason: timing the execution of a query (coordinator side should be full query time)
                     timing_start(ExecSimpleQuery);
@@ -5029,7 +5049,15 @@ PostgresMain(const char *dbname, const char *username)
 								firstchar)));
 		}
         // jason: print logger timings here (should be the end of executing a query/command)
-        logger_print_timings();
+        if (skip_logger_print)
+        {
+            /* For specific internal queries, reset logger instead of printing */
+            logger_reset();
+        }
+        else
+        {
+            logger_print_timings();
+        }
     } /* end of input-reading loop */
 }
 

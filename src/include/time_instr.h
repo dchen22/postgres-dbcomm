@@ -84,6 +84,8 @@ void logger_print_timings(void);
 
 void logger_cleanup();
 
+void logger_reset();
+
 /**
  * @brief The internal implementation of the logger. Do not call this directly.
  * Use the log_message() macro instead.

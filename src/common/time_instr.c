@@ -177,7 +177,8 @@ void logger_print_timings(void)
     logger_init(_NUM_TIMING_SPOTS, timing_spot_names);
 }
 
-void logger_cleanup()
+// free and re-init the logger
+void logger_reset()
 {
     if (logger_state.stats != NULL)
     {
@@ -185,6 +186,7 @@ void logger_cleanup()
         logger_state.stats = NULL;
         logger_state.num_timers = 0;
     }
+    logger_init(_NUM_TIMING_SPOTS, timing_spot_names);
 }
 
 void log_message_internal(const char *file, int line, const char *format, ...)
