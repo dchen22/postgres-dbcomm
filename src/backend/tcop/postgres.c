@@ -4750,8 +4750,8 @@ PostgresMain(const char *dbname, const char *username)
 		if (ignore_till_sync && firstchar != EOF)
 			continue;
 
-        /* By default, we print logger timings after each loop iteration. */
-        bool skip_logger_print = false;
+        // don't print certain Citus internal queries
+        bool skip_query_str_print = false;
 
         switch (firstchar)
 		{
@@ -4776,9 +4776,9 @@ PostgresMain(const char *dbname, const char *username)
                         while (qs && *qs && isspace((unsigned char)*qs))
                             qs++;
                         if (qs && (strncmp(qs, "SELECT gid", 10) == 0 || strncmp(qs, "SELECT waiting_pid", 18) == 0))
-                            skip_logger_print = true;
+                            skip_query_str_print = true;
                         else
-                            skip_logger_print = false;
+                            skip_query_str_print = false;
                     }
 
                     // jason: timing the execution of a query (coordinator side should be full query time)
@@ -4793,7 +4793,8 @@ PostgresMain(const char *dbname, const char *username)
 
                     // jason: end timing
                     timing_end(ExecSimpleQuery);
-                    log_message("Query executed: %s", query_string);
+                    if (!skip_query_str_print)
+                        log_message("Query executed: %s", query_string);
 
                     valgrind_report_error_query(query_string);
 
@@ -4867,10 +4868,14 @@ PostgresMain(const char *dbname, const char *username)
                     // jason: log PqMsg_Execute too
                     log_message("PqMsg_Execute portal_name: %s", portal_name);
                     // log_message("PqMsg_Execute max_rows: %d", max_rows);
-                    exec_execute_message(portal_name, max_rows);
 
-					/* exec_execute_message does valgrind_report_error_query */
-				}
+                    // jason: timing the execution of a query, TODO: don't call it simple query
+                    timing_start(ExecSimpleQuery);
+                    exec_execute_message(portal_name, max_rows);
+                    timing_end(ExecSimpleQuery);
+
+                    /* exec_execute_message does valgrind_report_error_query */
+                }
 				break;
 
 			case PqMsg_FunctionCall:
@@ -4898,7 +4903,9 @@ PostgresMain(const char *dbname, const char *username)
 				/* switch back to message context */
 				MemoryContextSwitchTo(MessageContext);
 
-				HandleFunctionRequest(&input_message);
+                // jason: log PqMsg_FunctionCall too
+                log_message("PqMsg_FunctionCall received: %s\n", input_message.data);
+                HandleFunctionRequest(&input_message);
 
 				/* commit the function-invocation transaction */
 				finish_xact_command();
@@ -5049,7 +5056,7 @@ PostgresMain(const char *dbname, const char *username)
 								firstchar)));
 		}
         // jason: print logger timings here (should be the end of executing a query/command)
-        if (skip_logger_print)
+        if (skip_query_str_print)
         {
             /* For specific internal queries, reset logger instead of printing */
             logger_reset();
