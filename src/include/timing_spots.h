@@ -42,6 +42,7 @@
     X(EndingComms)                                                                                                     \
     X(Printtup_Startup)                                                                                                \
     X(Printtup)                                                                                                        \
+    X(Printtup_Net)                                                                                                    \
     X(PQ_putmessage)                                                                                                   \
     X(CreateCitusTable_)                                                                                               \
     X(CopyFromLocalTableIntoDistTable_)                                                                                \

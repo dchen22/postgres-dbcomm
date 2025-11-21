@@ -378,15 +378,21 @@ printtup(TupleTableSlot *slot, DestReceiver *self)
 		}
 	}
 
-	pq_endmessage_reuse(buf);
+    // jason: timing the network send part
+    timing_start(Printtup_Net);
 
-	/* Return to caller's context, and flush row's temporary memory */
+    timing_add_stat(Printtup, STAT_TOTAL_BYTES_SENT, buf->len);
+
+    pq_endmessage_reuse(buf);
+
+    timing_end(Printtup_Net);
+
+    /* Return to caller's context, and flush row's temporary memory */
 	MemoryContextSwitchTo(oldcontext);
 	MemoryContextReset(myState->tmpcontext);
 
     // jason: end timing
     timing_end(Printtup);
-    timing_add_stat(Printtup, STAT_TOTAL_BYTES_SENT, buf->len);
 
     return true;
 }
