@@ -34,12 +34,23 @@
 // ReceiveResults_HeapFormTuple happens during ReceiveResults_BuildTuples, and is a PG call, subtracting its time
 // reflects the rest of deserialzation time
 #define TIMING_SPOTS(X)                                                                                                \
+    X(PG_WAIT)                                                                                                         \
     X(ExecSimpleQuery)                                                                                                 \
     X(ParseQuery)                                                                                                      \
     X(QueryAnalyzeAndRewrite)                                                                                          \
     X(QueryExecution)                                                                                                  \
     X(QueryPlanning)                                                                                                   \
     X(EndingComms)                                                                                                     \
+    X(CopyTo_)                                                                                                         \
+    X(CopyTo_GetTuples)                                                                                                \
+    X(CopyTo_CopyOneRowTo)                                                                                             \
+    X(CopyTo_fwrite)                                                                                                   \
+                                                                                                                       \
+    X(Receiver_CopyFrom)                                                                                               \
+    X(NextCopyFrom_)                                                                                                   \
+    X(CopyFrom_CopyGetData)                                                                                            \
+    X(CopyFromInsertIntoTable)                                                                                         \
+                                                                                                                       \
     X(Printtup_Startup)                                                                                                \
     X(Printtup)                                                                                                        \
     X(Printtup_Net)                                                                                                    \
@@ -52,9 +63,6 @@
     X(SendCopyDataToPlacement_)                                                                                        \
     X(WriteTupleToLocal_)                                                                                              \
     X(DoLocalCopy_)                                                                                                    \
-    X(Receiver_CopyFrom)                                                                                               \
-    X(NextCopyFrom_)                                                                                                   \
-    X(CopyFromInsertIntoTable)                                                                                         \
                                                                                                                        \
     X(FetchIntermediate_)                                                                                              \
     X(FetchIntermediate_CopyAndWrite)                                                                                  \

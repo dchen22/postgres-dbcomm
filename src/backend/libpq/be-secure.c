@@ -30,6 +30,7 @@
 #include "libpq/libpq.h"
 #include "miscadmin.h"
 #include "tcop/tcopprot.h"
+#include "time_instr.h"
 #include "utils/wait_event.h"
 
 char	   *ssl_library;
@@ -209,12 +210,17 @@ retry:
 
 		Assert(waitfor);
 
-		ModifyWaitEvent(FeBeWaitSet, FeBeWaitSetSocketPos, waitfor, NULL);
+        // jason: wait for socket read, can happen under COPY FROM, probably others too
+        timing_start(PG_WAIT);
+
+        ModifyWaitEvent(FeBeWaitSet, FeBeWaitSetSocketPos, waitfor, NULL);
 
 		WaitEventSetWait(FeBeWaitSet, -1 /* no timeout */ , &event, 1,
 						 WAIT_EVENT_CLIENT_READ);
 
-		/*
+        timing_end(PG_WAIT);
+
+        /*
 		 * If the postmaster has died, it's not safe to continue running,
 		 * because it is the postmaster's job to kill us if some other backend
 		 * exits uncleanly.  Moreover, we won't run very well in this state;

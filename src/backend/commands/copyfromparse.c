@@ -76,6 +76,8 @@
 #include "utils/builtins.h"
 #include "utils/rel.h"
 
+#include "time_instr.h"
+
 #define ISOCTAL(c) (((c) >= '0') && ((c) <= '7'))
 #define OCTVALUE(c) ((c) - '0')
 
@@ -246,8 +248,11 @@ CopyGetData(CopyFromState cstate, void *databuf, int minread, int maxread)
 {
 	int			bytesread = 0;
 
-	switch (cstate->copy_src)
-	{
+    // jason: timing of receiving COPY data
+    timing_start(CopyFrom_CopyGetData);
+
+    switch (cstate->copy_src)
+    {
 		case COPY_FILE:
 			bytesread = fread(databuf, 1, maxread, cstate->copy_file);
 			if (ferror(cstate->copy_file))
@@ -345,7 +350,10 @@ CopyGetData(CopyFromState cstate, void *databuf, int minread, int maxread)
 			break;
 	}
 
-	return bytesread;
+    // jason: timing of receiving COPY data
+    timing_end(CopyFrom_CopyGetData);
+
+    return bytesread;
 }
 
 

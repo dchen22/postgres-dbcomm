@@ -15,8 +15,9 @@
 #include "postgres.h"
 
 #include <ctype.h>
-#include <unistd.h>
+#include <stdbool.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
 #include "access/tableam.h"
 #include "commands/copy.h"
@@ -31,6 +32,8 @@
 #include "pgstat.h"
 #include "storage/fd.h"
 #include "tcop/tcopprot.h"
+#include "time_instr.h"
+#include "timing_spots.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
 #include "utils/rel.h"
@@ -201,10 +204,11 @@ CopySendEndOfRow(CopyToState cstate)
 #endif
 			}
 
-			if (fwrite(fe_msgbuf->data, fe_msgbuf->len, 1,
-					   cstate->copy_file) != 1 ||
-				ferror(cstate->copy_file))
-			{
+            // jason: timing of fwrite in COPY TO
+            timing_start(CopyTo_fwrite);
+
+            if (fwrite(fe_msgbuf->data, fe_msgbuf->len, 1, cstate->copy_file) != 1 || ferror(cstate->copy_file))
+            {
 				if (cstate->is_program)
 				{
 					if (errno == EPIPE)
@@ -233,8 +237,11 @@ CopySendEndOfRow(CopyToState cstate)
 							(errcode_for_file_access(),
 							 errmsg("could not write to COPY file: %m")));
 			}
-			break;
-		case COPY_FRONTEND:
+
+            // jason: end timing of fwrite in COPY TO
+            timing_end(CopyTo_fwrite);
+            break;
+        case COPY_FRONTEND:
 			/* The FE/BE protocol uses \n as newline for all platforms */
 			if (!cstate->opts.binary)
 				CopySendChar(cstate, '\n');
@@ -856,25 +863,42 @@ DoCopyTo(CopyToState cstate)
 		slot = table_slot_create(cstate->rel, NULL);
 
 		processed = 0;
-		while (table_scan_getnextslot(scandesc, ForwardScanDirection, slot))
-		{
-			CHECK_FOR_INTERRUPTS();
+        bool got_slot = false;
+        // while (table_scan_getnextslot(scandesc, ForwardScanDirection, slot))
+        while (true)
+        {
+            CHECK_FOR_INTERRUPTS();
 
-			/* Deconstruct the tuple ... */
-			slot_getallattrs(slot);
+            // jason: get next slot here and measure the time to fetch tuple data
+            timing_start(CopyTo_GetTuples);
 
-			/* Format and send the data */
+            got_slot = table_scan_getnextslot(scandesc, ForwardScanDirection, slot);
+            if (!got_slot)
+                break;
+
+            /* Deconstruct the tuple ... */
+            slot_getallattrs(slot);
+
+            // jason: end timing of fetching tuple data
+            timing_end(CopyTo_GetTuples);
+
+            // jason: timing of CopyOneRowTo in COPY TO
+            timing_start(CopyTo_CopyOneRowTo);
+
+            /* Format and send the data */
 			CopyOneRowTo(cstate, slot);
 
-			/*
+            timing_end(CopyTo_CopyOneRowTo);
+
+            /*
 			 * Increment the number of processed tuples, and report the
 			 * progress.
 			 */
 			pgstat_progress_update_param(PROGRESS_COPY_TUPLES_PROCESSED,
 										 ++processed);
-		}
+        }
 
-		ExecDropSingleTupleTableSlot(slot);
+        ExecDropSingleTupleTableSlot(slot);
 		table_endscan(scandesc);
 	}
 	else

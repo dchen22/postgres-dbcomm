@@ -46,6 +46,7 @@
 #include "storage/fd.h"
 #include "tcop/tcopprot.h"
 #include "time_instr.h"
+#include "timing_spots.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
 #include "utils/portal.h"
@@ -953,7 +954,8 @@ CopyFrom(CopyFromState cstate)
 	errcallback.previous = error_context_stack;
 	error_context_stack = &errcallback;
 
-	for (;;)
+    // XXX: jason: main loop here
+    for (;;)
 	{
 		TupleTableSlot *myslot;
 		bool		skip_tuple;
@@ -990,8 +992,18 @@ CopyFrom(CopyFromState cstate)
 		ExecClearTuple(myslot);
 
 		/* Directly store the values/nulls array in the slot */
-		if (!NextCopyFrom(cstate, econtext, myslot->tts_values, myslot->tts_isnull))
-			break;
+
+        // jason: time around NextCopyFrom, which includes both network io and some serialization
+        timing_start(NextCopyFrom_);
+
+        bool next_ok;
+        next_ok = NextCopyFrom(cstate, econtext, myslot->tts_values, myslot->tts_isnull);
+
+        timing_end(NextCopyFrom_);
+
+        // if (!NextCopyFrom(cstate, econtext, myslot->tts_values, myslot->tts_isnull))
+        if (!next_ok)
+            break;
 
 		if (cstate->opts.on_error != COPY_ON_ERROR_STOP &&
 			cstate->escontext->error_occurred)

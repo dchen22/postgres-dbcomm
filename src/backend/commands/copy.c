@@ -303,11 +303,11 @@ DoCopy(ParseState *pstate, const CopyStmt *stmt,
 		if (XactReadOnly && !rel->rd_islocaltemp)
 			PreventCommandIfReadOnly("COPY FROM");
 
-		cstate = BeginCopyFrom(pstate, rel, whereClause,
-							   stmt->filename, stmt->is_program,
-							   NULL, stmt->attlist, stmt->options);
         // jason: timing of receiving COPY data
         timing_start(Receiver_CopyFrom);
+
+        cstate = BeginCopyFrom(pstate, rel, whereClause, stmt->filename, stmt->is_program, NULL, stmt->attlist,
+                               stmt->options);
 
         *processed = CopyFrom(cstate);	/* copy from file to database */
 
@@ -320,14 +320,19 @@ DoCopy(ParseState *pstate, const CopyStmt *stmt,
 	{
 		CopyToState cstate;
 
-		cstate = BeginCopyTo(pstate, rel, query, relid,
-							 stmt->filename, stmt->is_program,
-							 NULL, stmt->attlist, stmt->options);
-		*processed = DoCopyTo(cstate);	/* copy from database to file */
-		EndCopyTo(cstate);
-	}
+        // jason: timing of sending COPY TO data
+        timing_start(CopyTo_);
 
-	if (rel != NULL)
+        cstate = BeginCopyTo(pstate, rel, query, relid, stmt->filename, stmt->is_program, NULL, stmt->attlist,
+                             stmt->options);
+        *processed = DoCopyTo(cstate);	/* copy from database to file */
+		EndCopyTo(cstate);
+
+        // jason: end timing of sending COPY TO data
+        timing_end(CopyTo_);
+    }
+
+    if (rel != NULL)
         table_close(rel, NoLock);
 
     // print timing results for COPY
