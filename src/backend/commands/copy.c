@@ -336,7 +336,8 @@ DoCopy(ParseState *pstate, const CopyStmt *stmt,
         table_close(rel, NoLock);
 
     // print timing results for COPY
-    logger_print_timings();
+    // maybe not here, printing at the end of the postgres main loop
+    // logger_print_timings();
 }
 
 /*
