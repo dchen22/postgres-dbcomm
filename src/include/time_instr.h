@@ -86,6 +86,9 @@ void logger_cleanup();
 
 void logger_reset();
 
+size_t LoggerShmemSize(void);
+void LoggerShmemInit(void);
+
 /**
  * @brief The internal implementation of the logger. Do not call this directly.
  * Use the log_message() macro instead.

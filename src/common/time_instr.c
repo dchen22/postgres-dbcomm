@@ -1,12 +1,14 @@
-#include <pthread.h> // For mutex protecting logger_print_timings
+#include "postgres.h"
+#include "storage/ipc.h"
+#include "storage/lwlock.h"
+#include "storage/shmem.h"
+
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/time.h> // For gettimeofday in log_message
 
 #include "time_instr.h"
-
-#include "postgres.h"
 
 #include "port.h" // for printf from PG
 
@@ -30,8 +32,26 @@ static struct
     timer_stat_t *stats;
 } logger_state = {0, NULL};
 
-/* Mutex to protect logger_print_timings so it can't be called concurrently. */
-static pthread_mutex_t logger_print_mutex = PTHREAD_MUTEX_INITIALIZER;
+typedef struct LoggerSharedState
+{
+    LWLock lock;
+} LoggerSharedState;
+
+static LoggerSharedState *logger_shared = NULL;
+
+size_t LoggerShmemSize(void) { return sizeof(LoggerSharedState); }
+
+void LoggerShmemInit(void)
+{
+    bool found;
+
+    logger_shared = (LoggerSharedState *)ShmemInitStruct("Logger Shared State", LoggerShmemSize(), &found);
+
+    if (!found)
+    {
+        LWLockInitialize(&logger_shared->lock, LWTRANCHE_LOGGER);
+    }
+}
 
 int logger_init(int num_timers, const char *names[])
 {
@@ -113,16 +133,17 @@ void timing_end(int timer_id)
 void logger_print_timings(void)
 {
     /* Acquire mutex to ensure logger_print_timings is not called concurrently. */
-    if (pthread_mutex_lock(&logger_print_mutex) != 0)
+    if (logger_shared == NULL)
     {
-        printf("Failed to acquire logger_print_timings mutex\n");
         return;
     }
+
+    LWLockAcquire(&logger_shared->lock, LW_EXCLUSIVE);
 
     if (logger_state.stats == NULL)
     {
         printf("Logger not initialized\n");
-        pthread_mutex_unlock(&logger_print_mutex);
+        LWLockRelease(&logger_shared->lock);
         return;
     }
 
@@ -139,7 +160,7 @@ void logger_print_timings(void)
     }
     if (!any_recorded)
     {
-        pthread_mutex_unlock(&logger_print_mutex);
+        LWLockRelease(&logger_shared->lock);
         return;
     }
 
@@ -191,7 +212,7 @@ void logger_print_timings(void)
     // do logger init again just in case
     logger_init(_NUM_TIMING_SPOTS, timing_spot_names);
 
-    pthread_mutex_unlock(&logger_print_mutex);
+    LWLockRelease(&logger_shared->lock);
 }
 
 // free and re-init the logger
