@@ -1,3 +1,4 @@
+#include <pthread.h> // For mutex protecting logger_print_timings
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
@@ -28,6 +29,9 @@ static struct
     int num_timers;
     timer_stat_t *stats;
 } logger_state = {0, NULL};
+
+/* Mutex to protect logger_print_timings so it can't be called concurrently. */
+static pthread_mutex_t logger_print_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 int logger_init(int num_timers, const char *names[])
 {
@@ -108,9 +112,17 @@ void timing_end(int timer_id)
 
 void logger_print_timings(void)
 {
+    /* Acquire mutex to ensure logger_print_timings is not called concurrently. */
+    if (pthread_mutex_lock(&logger_print_mutex) != 0)
+    {
+        printf("Failed to acquire logger_print_timings mutex\n");
+        return;
+    }
+
     if (logger_state.stats == NULL)
     {
         printf("Logger not initialized\n");
+        pthread_mutex_unlock(&logger_print_mutex);
         return;
     }
 
@@ -126,7 +138,10 @@ void logger_print_timings(void)
         }
     }
     if (!any_recorded)
+    {
+        pthread_mutex_unlock(&logger_print_mutex);
         return;
+    }
 
     // Print header for nanosecond timing report
     printf("\n--- Timing Report (Nanoseconds) ---\n");
@@ -175,6 +190,8 @@ void logger_print_timings(void)
 
     // do logger init again just in case
     logger_init(_NUM_TIMING_SPOTS, timing_spot_names);
+
+    pthread_mutex_unlock(&logger_print_mutex);
 }
 
 // free and re-init the logger
