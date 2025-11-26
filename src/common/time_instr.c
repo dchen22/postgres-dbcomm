@@ -1,7 +1,12 @@
 #include "postgres.h"
+
+#ifndef FRONTEND
 #include "storage/ipc.h"
 #include "storage/lwlock.h"
 #include "storage/shmem.h"
+#else
+#include <pthread.h>
+#endif
 
 #include <stdarg.h>
 #include <stdlib.h>
@@ -32,6 +37,7 @@ static struct
     timer_stat_t *stats;
 } logger_state = {0, NULL};
 
+#ifndef FRONTEND
 typedef struct LoggerSharedState
 {
     LWLock lock;
@@ -52,6 +58,9 @@ void LoggerShmemInit(void)
         LWLockInitialize(&logger_shared->lock, LWTRANCHE_LOGGER);
     }
 }
+#else
+static pthread_mutex_t logger_print_mutex = PTHREAD_MUTEX_INITIALIZER;
+#endif
 
 int logger_init(int num_timers, const char *names[])
 {
@@ -133,6 +142,7 @@ void timing_end(int timer_id)
 void logger_print_timings(void)
 {
     /* Acquire mutex to ensure logger_print_timings is not called concurrently. */
+#ifndef FRONTEND
     if (logger_shared == NULL)
     {
         return;
@@ -146,6 +156,20 @@ void logger_print_timings(void)
         LWLockRelease(&logger_shared->lock);
         return;
     }
+#else
+    if (pthread_mutex_lock(&logger_print_mutex) != 0)
+    {
+        printf("Failed to acquire logger_print_timings mutex\n");
+        return;
+    }
+
+    if (logger_state.stats == NULL)
+    {
+        printf("Logger not initialized\n");
+        pthread_mutex_unlock(&logger_print_mutex);
+        return;
+    }
+#endif
 
     /* If nothing has been recorded (no timer has a non-zero count),
        do not print anything at all. */
@@ -160,7 +184,11 @@ void logger_print_timings(void)
     }
     if (!any_recorded)
     {
+#ifndef FRONTEND
         LWLockRelease(&logger_shared->lock);
+#else
+        pthread_mutex_unlock(&logger_print_mutex);
+#endif
         return;
     }
 
@@ -212,7 +240,11 @@ void logger_print_timings(void)
     // do logger init again just in case
     logger_init(_NUM_TIMING_SPOTS, timing_spot_names);
 
+#ifndef FRONTEND
     LWLockRelease(&logger_shared->lock);
+#else
+    pthread_mutex_unlock(&logger_print_mutex);
+#endif
 }
 
 // free and re-init the logger

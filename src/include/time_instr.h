@@ -86,8 +86,10 @@ void logger_cleanup();
 
 void logger_reset();
 
+#ifndef FRONTEND
 size_t LoggerShmemSize(void);
 void LoggerShmemInit(void);
+#endif
 
 /**
  * @brief The internal implementation of the logger. Do not call this directly.
