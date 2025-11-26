@@ -15,6 +15,7 @@
 
 #include "time_instr.h"
 
+#include "lib/stringinfo.h"
 #include "port.h" // for printf from PG
 
 const char *timing_spot_names[_NUM_TIMING_SPOTS] = {TIMING_SPOTS(AS_STRING)};
@@ -139,6 +140,13 @@ void timing_end(int timer_id)
     logger_state.stats[timer_id].count++;
 }
 
+/*
+ * Legacy logger_print_timings implementation retained for reference. It
+ * relied on stdout buffering, which could interleave output across processes.
+ * The new implementation below emits via elog() to leverage PostgreSQL's
+ * unbuffered logging path.
+ */
+#if 0
 void logger_print_timings(void)
 {
     /* Acquire mutex to ensure logger_print_timings is not called concurrently. */
@@ -243,6 +251,140 @@ void logger_print_timings(void)
 #ifndef FRONTEND
     LWLockRelease(&logger_shared->lock);
 #else
+    pthread_mutex_unlock(&logger_print_mutex);
+#endif
+}
+#endif /* Legacy logger_print_timings() */
+
+/**
+ * @brief Emit timing statistics through elog() so each report is unbuffered.
+ *
+ * The backend path leverages PostgreSQL's logging infrastructure, avoiding
+ * stdout buffering entirely. In FRONTEND builds, where elog() is unavailable,
+ * we still fall back to fprintf(stderr, ...) paired with fflush() to keep the
+ * behavior deterministic.
+ */
+void logger_print_timings(void)
+{
+    /* Acquire mutex to ensure logger_print_timings is not called concurrently. */
+#ifndef FRONTEND
+    if (logger_shared == NULL)
+    {
+        return;
+    }
+
+    if (logger_state.stats == NULL)
+    {
+        /* Protect the elog() call so concurrent processes don't mix messages. */
+        LWLockAcquire(&logger_shared->lock, LW_EXCLUSIVE);
+        elog(LOG, "Logger not initialized");
+        LWLockRelease(&logger_shared->lock);
+        return;
+    }
+#else
+    if (pthread_mutex_lock(&logger_print_mutex) != 0)
+    {
+        fprintf(stderr, "Failed to acquire logger_print_timings mutex\n");
+        fflush(stderr);
+        return;
+    }
+
+    if (logger_state.stats == NULL)
+    {
+        fprintf(stderr, "Logger not initialized\n");
+        fflush(stderr);
+        pthread_mutex_unlock(&logger_print_mutex);
+        return;
+    }
+#endif
+
+    /* If nothing has been recorded (no timer has a non-zero count),
+       do not print anything at all. */
+    int any_recorded = 0;
+    for (int i = 0; i < logger_state.num_timers; ++i)
+    {
+        if (logger_state.stats[i].count > 0)
+        {
+            any_recorded = 1;
+            break;
+        }
+    }
+    if (!any_recorded)
+    {
+#ifdef FRONTEND
+        pthread_mutex_unlock(&logger_print_mutex);
+#endif
+        return;
+    }
+
+    /* Compose the full report before logging so a single elog() call emits it atomically. */
+    StringInfoData buf;
+    initStringInfo(&buf);
+
+    appendStringInfoString(&buf, "\n--- Timing Report (Nanoseconds) ---\n");
+    appendStringInfo(&buf, "%-30s | %10s | %18s | %18s | %s\n", "Timer Name", "Count", "Total Time (ns)",
+                     "Average Time (ns)", "Custom Stats");
+    appendStringInfoString(
+        &buf,
+        "----------------------------------------------------------------------------------------------------------"
+        "-\n");
+
+    for (int i = 0; i < logger_state.num_timers; ++i)
+    {
+        timer_stat_t *stat = &logger_state.stats[i];
+        if (stat->count == 0)
+            continue;
+
+        // Use nanoseconds for both total and average
+        uint64_t total_ns = stat->total_ns;
+        uint64_t avg_ns = stat->count ? (stat->total_ns / stat->count) : 0;
+
+        appendStringInfo(&buf, "%-30s | %10llu | %18llu | %18llu | ", stat->name, (unsigned long long)stat->count,
+                         (unsigned long long)total_ns, (unsigned long long)avg_ns);
+
+        /* Print custom stats in comma-separated key=value format */
+        int first = 1;
+        int j;
+        for (j = 0; j < _NUM_CUSTOM_STATS; ++j)
+        {
+            /* Only print non-zero stats */
+            if (stat->custom_stats[j] > 0)
+            {
+                if (!first)
+                {
+                    appendStringInfoString(&buf, ", ");
+                }
+                appendStringInfo(&buf, "%s=%llu", custom_stat_names[j], (unsigned long long)stat->custom_stats[j]);
+                first = 0;
+            }
+        }
+        appendStringInfoChar(&buf, '\n');
+    }
+    appendStringInfoString(
+        &buf,
+        "----------------------------------------------------------------------------------------------------------"
+        "-\n");
+
+#ifndef FRONTEND
+    /* Acquire the LWLock only while emitting the final elog() so output order remains deterministic. */
+    LWLockAcquire(&logger_shared->lock, LW_EXCLUSIVE);
+    elog(LOG_SERVER_ONLY, "%s", buf.data);
+    LWLockRelease(&logger_shared->lock);
+#else
+    fprintf(stderr, "%s\n", buf.data);
+    fflush(stderr);
+#endif
+
+    pfree(buf.data);
+
+    free(logger_state.stats);
+    logger_state.stats = NULL;
+    logger_state.num_timers = 0;
+
+    // do logger init again just in case
+    logger_init(_NUM_TIMING_SPOTS, timing_spot_names);
+
+#ifdef FRONTEND
     pthread_mutex_unlock(&logger_print_mutex);
 #endif
 }
