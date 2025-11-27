@@ -4685,8 +4685,14 @@ PostgresMain(const char *dbname, const char *username)
 			/* Report any recently-changed GUC options */
 			ReportChangedGUCOptions();
 
-			ReadyForQuery(whereToSendOutput);
-			send_ready_for_query = false;
+            // jason: there might be a tiny PG wait in here due to pq_flush
+            timing_start(PG_WAIT_DONT_COUNT);
+
+            ReadyForQuery(whereToSendOutput);
+
+            timing_end(PG_WAIT_DONT_COUNT);
+
+            send_ready_for_query = false;
 		}
 
 		/*
@@ -4700,18 +4706,23 @@ PostgresMain(const char *dbname, const char *username)
 		/*
 		 * (3) read a command (loop blocks here)
 		 */
-		firstchar = ReadCommand(&input_message);
+        // jason: start timing idle time (this is just waiting for queries from other nodes/client)
+        timing_start(PG_WAIT_DONT_COUNT);
 
-		/*
-		 * (4) turn off the idle-in-transaction and idle-session timeouts if
-		 * active.  We do this before step (5) so that any last-moment timeout
-		 * is certain to be detected in step (5).
-		 *
-		 * At most one of these timeouts will be active, so there's no need to
-		 * worry about combining the timeout.c calls into one.
-		 */
-		if (idle_in_transaction_timeout_enabled)
-		{
+        firstchar = ReadCommand(&input_message);
+
+        timing_end(PG_WAIT_DONT_COUNT);
+
+        /*
+         * (4) turn off the idle-in-transaction and idle-session timeouts if
+         * active.  We do this before step (5) so that any last-moment timeout
+         * is certain to be detected in step (5).
+         *
+         * At most one of these timeouts will be active, so there's no need to
+         * worry about combining the timeout.c calls into one.
+         */
+        if (idle_in_transaction_timeout_enabled)
+        {
 			disable_timeout(IDLE_IN_TRANSACTION_SESSION_TIMEOUT, false);
 			idle_in_transaction_timeout_enabled = false;
 		}

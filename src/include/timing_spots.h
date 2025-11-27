@@ -35,6 +35,8 @@
 // reflects the rest of deserialzation time
 #define TIMING_SPOTS(X)                                                                                                \
     X(PG_WAIT)                                                                                                         \
+    X(PG_WAIT_DONT_COUNT)                                                                                              \
+                                                                                                                       \
     X(ExecSimpleQuery)                                                                                                 \
     X(ParseQuery)                                                                                                      \
     X(QueryAnalyzeAndRewrite)                                                                                          \
@@ -55,6 +57,7 @@
     X(Printtup)                                                                                                        \
     X(Printtup_Net)                                                                                                    \
     X(PQ_putmessage)                                                                                                   \
+                                                                                                                       \
     X(CreateCitusTable_)                                                                                               \
     X(CopyFromLocalTableIntoDistTable_)                                                                                \
     X(DoCopyFromLocalTableIntoShards_)                                                                                 \
