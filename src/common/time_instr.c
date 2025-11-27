@@ -403,22 +403,43 @@ void logger_reset()
 
 void log_message_internal(const char *file, int line, const char *format, ...)
 {
-    // Get current time for the log message timestamp
-    char time_buf[32];
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    strftime(time_buf, sizeof(time_buf) - 1, "%Y-%m-%d %H:%M:%S", localtime(&tv.tv_sec));
-
-    // Add milliseconds
-    int len = strlen(time_buf);
-    snprintf(time_buf + len, sizeof(time_buf) - len, ".%03ld", tv.tv_usec / 1000);
-
-    // Print the file, line, timestamp, and the user's message
-    printf("[%s:%d] [%s] ", file, line, time_buf);
-
+    StringInfoData buf;
     va_list args;
+
+    initStringInfo(&buf);
+
     va_start(args, format);
-    vprintf(format, args);
+    appendStringInfoVA(&buf, format, args);
     va_end(args);
-    printf("\n");
+
+#ifndef FRONTEND
+    if (logger_shared != NULL)
+        LWLockAcquire(&logger_shared->lock, LW_EXCLUSIVE);
+
+    /* elog automatically adds timestamp */
+    elog(LOG, "[%s:%d] %s", file, line, buf.data);
+
+    if (logger_shared != NULL)
+        LWLockRelease(&logger_shared->lock);
+#else
+    if (pthread_mutex_lock(&logger_print_mutex) == 0)
+    {
+        // Get current time for the log message timestamp
+        char time_buf[32];
+        struct timeval tv;
+        gettimeofday(&tv, NULL);
+        strftime(time_buf, sizeof(time_buf) - 1, "%Y-%m-%d %H:%M:%S", localtime(&tv.tv_sec));
+
+        // Add milliseconds
+        int len = strlen(time_buf);
+        snprintf(time_buf + len, sizeof(time_buf) - len, ".%03ld", tv.tv_usec / 1000);
+
+        // Print the file, line, timestamp, and the user's message
+        printf("[%s:%d] [%s] %s\n", file, line, time_buf, buf.data);
+
+        pthread_mutex_unlock(&logger_print_mutex);
+    }
+#endif
+
+    pfree(buf.data);
 }
