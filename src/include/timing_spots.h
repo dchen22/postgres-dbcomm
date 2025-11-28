@@ -33,6 +33,8 @@
 // RemoteFileDestReceiver_Init may include writing to local file, plus setting up connections
 // ReceiveResults_HeapFormTuple happens during ReceiveResults_BuildTuples, and is a PG call, subtracting its time
 // reflects the rest of deserialzation time
+
+// XACT_TS_WaitForConnections consists of 2 scenarios:
 #define TIMING_SPOTS(X)                                                                                                \
     X(PG_WAIT)                                                                                                         \
     X(PG_WAIT_DONT_COUNT)                                                                                              \
@@ -94,6 +96,15 @@
     X(RemoteFileDestReceiver_SerAndSend_WriteLocal)                                                                    \
                                                                                                                        \
     X(ProcessCopyStmt_)                                                                                                \
+                                                                                                                       \
+    X(XACT_PROCESSING)                                                                                                 \
+    X(XACT_TS_SendRemoteCommand)                                                                                       \
+    X(XACT_TS_GetRemoteCommandResult)                                                                                  \
+    X(XACT_TS_WaitForConnections)                                                                                      \
+    X(XACT_TS_coordinated_commit_abort)                                                                                \
+    X(XACT_TS_EndCommand)                                                                                              \
+    X(XACT_TS_CoordinatorPrepare)                                                                                      \
+    X(XACT_WAIT)                                                                                                       \
                                                                                                                        \
     X(SendQuery_func)                                                                                                  \
     X(ExecQueryAndProcessResults_func)                                                                                 \

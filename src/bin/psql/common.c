@@ -1529,8 +1529,8 @@ ExecQueryAndProcessResults(const char *query,
 
 	/* first result */
 
-    // jason: timing start
-    timing_start(ExecQueryAndProcessResults_first_result);
+    // // jason: timing start; DON'T NEED THIS PROBABLY
+    // timing_start(ExecQueryAndProcessResults_first_result);
 
     result = PQgetResult(pset.db);
     if (min_rows > 0 && PQntuples(result) < min_rows)

@@ -40,7 +40,7 @@
 #include "executor/tstoreReceiver.h"
 #include "libpq/libpq.h"
 #include "libpq/pqformat.h"
-
+#include "timing_spots.h"
 
 /* ----------------
  *		dummy DestReceiver functions
@@ -171,7 +171,10 @@ EndCommand(const QueryCompletion *qc, CommandDest dest, bool force_undecorated_o
 	char		completionTag[COMPLETION_TAG_BUFSIZE];
 	Size		len;
 
-	switch (dest)
+    // jason: timing the network time for ACKing command completion
+    timing_start(XACT_TS_EndCommand);
+
+    switch (dest)
 	{
 		case DestRemote:
 		case DestRemoteExecute:
@@ -193,6 +196,9 @@ EndCommand(const QueryCompletion *qc, CommandDest dest, bool force_undecorated_o
 		case DestExplainSerialize:
 			break;
 	}
+
+    // jason: timing end for network time for ACKing command completion
+    timing_end(XACT_TS_EndCommand);
 }
 
 /* ----------------
