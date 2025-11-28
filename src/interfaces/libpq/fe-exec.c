@@ -28,6 +28,9 @@
 #include "libpq-int.h"
 #include "mb/pg_wchar.h"
 
+// jason: include timing instrumentation
+#include "time_instr.h"
+
 /* keep this in same order as ExecStatusType in libpq-fe.h */
 char	   *const pgresStatus[] = {
 	"PGRES_EMPTY_QUERY",
@@ -2067,9 +2070,13 @@ PQgetResult(PGconn *conn)
 		return NULL;
 
 	/* Parse any available data, if our state permits. */
-	parseInput(conn);
 
-	/* If not ready to return something, block until we are. */
+    // jason: timing start for deserialization
+    timing_start(ExecQueryAndProcessResults_parse_results);
+    parseInput(conn);
+    timing_end(ExecQueryAndProcessResults_parse_results);
+
+    /* If not ready to return something, block until we are. */
 	while (conn->asyncStatus == PGASYNC_BUSY)
 	{
 		int			flushResult;
@@ -2094,20 +2101,29 @@ PQgetResult(PGconn *conn)
 		 * EOF indication.  We expect therefore that this won't result in any
 		 * undue delay in reporting a previous write failure.)
 		 */
-		if (flushResult ||
-			pqWait(true, false, conn) ||
-			pqReadData(conn) < 0)
-		{
-			/* Report the error saved by pqWait or pqReadData */
+        // jason: time pqWait which will eventually block on poll/select
+        int pqWaitResult;
+        int pqReadDataResult;
+
+        if (flushResult ||
+            (timing_start(PG_WAIT), pqWaitResult = pqWait(true, false, conn), timing_end(PG_WAIT), pqWaitResult) ||
+            (timing_start(ExecQueryAndProcessResults_read_data), pqReadDataResult = pqReadData(conn),
+             timing_end(ExecQueryAndProcessResults_read_data), pqReadDataResult < 0))
+        {
+            /* Report the error saved by pqWait or pqReadData */
 			pqSaveErrorResult(conn);
 			conn->asyncStatus = PGASYNC_IDLE;
 			return pqPrepareAsyncResult(conn);
-		}
+        }
 
-		/* Parse it. */
-		parseInput(conn);
+        /* Parse it. */
 
-		/*
+        // jason: timing start for deserialization
+        timing_start(ExecQueryAndProcessResults_parse_results);
+        parseInput(conn);
+        timing_end(ExecQueryAndProcessResults_parse_results);
+
+        /*
 		 * If we had a write error, but nothing above obtained a query result
 		 * or detected a read error, report the write error.
 		 */

@@ -30,6 +30,9 @@
 #include "portability/instr_time.h"
 #include "settings.h"
 
+// jason: timing instrumentation and spots
+#include "time_instr.h"
+
 static bool DescribeQuery(const char *query, double *elapsed_msec);
 static int	ExecQueryAndProcessResults(const char *query,
 									   double *elapsed_msec,
@@ -1089,8 +1092,11 @@ SendQuery(const char *query)
 	bool		on_error_rollback_savepoint = false;
 	bool		svpt_gone = false;
 
-	if (!pset.db)
-	{
+    // jason: timing start for the whole func
+    timing_start(SendQuery_func);
+
+    if (!pset.db)
+    {
 		pg_log_error("You are currently not connected to a database.");
 		goto sendquery_cleanup;
 	}
@@ -1298,7 +1304,10 @@ sendquery_cleanup:
 		pset.ctv_args[i] = NULL;
 	}
 
-	return OK;
+    // jason: timing end
+    timing_end(SendQuery_func);
+
+    return OK;
 }
 
 
@@ -1457,8 +1466,11 @@ ExecQueryAndProcessResults(const char *query,
 	FILE	   *gfile_fout = NULL;
 	bool		gfile_is_pipe = false;
 
-	if (timing)
-		INSTR_TIME_SET_CURRENT(before);
+    // jason: timing start for the whole func
+    timing_start(ExecQueryAndProcessResults_func);
+
+    if (timing)
+        INSTR_TIME_SET_CURRENT(before);
 	else
 		INSTR_TIME_SET_ZERO(before);
 
@@ -1516,8 +1528,12 @@ ExecQueryAndProcessResults(const char *query,
 	}
 
 	/* first result */
-	result = PQgetResult(pset.db);
-	if (min_rows > 0 && PQntuples(result) < min_rows)
+
+    // jason: timing start
+    timing_start(ExecQueryAndProcessResults_first_result);
+
+    result = PQgetResult(pset.db);
+    if (min_rows > 0 && PQntuples(result) < min_rows)
 	{
 		return_early = true;
 	}
@@ -1822,7 +1838,10 @@ ExecQueryAndProcessResults(const char *query,
 	if (cancel_pressed || return_early)
 		return 0;
 
-	return success ? 1 : -1;
+    // jason: timing end for the whole func
+    timing_end(ExecQueryAndProcessResults_func);
+
+    return success ? 1 : -1;
 }
 
 

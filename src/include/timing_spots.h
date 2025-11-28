@@ -94,6 +94,11 @@
     X(RemoteFileDestReceiver_SerAndSend_WriteLocal)                                                                    \
                                                                                                                        \
     X(ProcessCopyStmt_)                                                                                                \
+                                                                                                                       \
+    X(SendQuery_func)                                                                                                  \
+    X(ExecQueryAndProcessResults_func)                                                                                 \
+    X(ExecQueryAndProcessResults_parse_results)                                                                        \
+    X(ExecQueryAndProcessResults_read_data)                                                                            \
     X(SomethingElseFunc)
 
 // --- Use the list to generate the enum ---

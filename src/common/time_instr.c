@@ -435,7 +435,9 @@ void log_message_internal(const char *file, int line, const char *format, ...)
         snprintf(time_buf + len, sizeof(time_buf) - len, ".%03ld", tv.tv_usec / 1000);
 
         // Print the file, line, timestamp, and the user's message
-        printf("[%s:%d] [%s] %s\n", file, line, time_buf, buf.data);
+        // printf("[%s:%d] [%s] %s\n", file, line, time_buf, buf.data);
+        fprintf(stderr, "[%s:%d] [%s] %s\n", file, line, time_buf, buf.data);
+        fflush(stderr); // flush stderr immediately to avoid interleaving in frontend clients
 
         pthread_mutex_unlock(&logger_print_mutex);
     }
