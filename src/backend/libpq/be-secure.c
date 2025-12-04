@@ -178,7 +178,10 @@ secure_read(Port *port, void *ptr, size_t len)
 	ssize_t		n;
 	int			waitfor;
 
-	/* Deal with any already-pending interrupt condition. */
+    // jason: timing PG BE SOCK READ
+    timing_start(PG_BE_SOCK_READ);
+
+    /* Deal with any already-pending interrupt condition. */
 	ProcessClientReadInterrupt(false);
 
 retry:
@@ -263,7 +266,10 @@ retry:
 	 */
 	ProcessClientReadInterrupt(false);
 
-	return n;
+    // jason: timing end PG BE SOCK READ
+    timing_end(PG_BE_SOCK_READ);
+
+    return n;
 }
 
 ssize_t
@@ -309,7 +315,10 @@ secure_write(Port *port, void *ptr, size_t len)
 	ssize_t		n;
 	int			waitfor;
 
-	/* Deal with any already-pending interrupt condition. */
+    // jason: timing PG BE SOCK WRITE
+    timing_start(PG_BE_SOCK_WRITE);
+
+    /* Deal with any already-pending interrupt condition. */
 	ProcessClientWriteInterrupt(false);
 
 retry:
@@ -377,7 +386,10 @@ retry:
 	 */
 	ProcessClientWriteInterrupt(false);
 
-	return n;
+    // jason: timing end PG BE SOCK WRITE
+    timing_end(PG_BE_SOCK_WRITE);
+
+    return n;
 }
 
 ssize_t

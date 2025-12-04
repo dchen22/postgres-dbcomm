@@ -13,6 +13,7 @@
  *-------------------------------------------------------------------------
  */
 #include "postgres_fe.h"
+#include "timing_spots.h"
 
 #include <ctype.h>
 #include <fcntl.h>
@@ -2022,7 +2023,9 @@ PQconsumeInput(PGconn *conn)
 static void
 parseInput(PGconn *conn)
 {
-	pqParseInput3(conn);
+    timing_start(PG_parseInput);
+    pqParseInput3(conn);
+    timing_end(PG_parseInput);
 }
 
 /*
@@ -2071,10 +2074,10 @@ PQgetResult(PGconn *conn)
 
 	/* Parse any available data, if our state permits. */
 
-    // jason: timing start for deserialization
-    timing_start(ExecQueryAndProcessResults_parse_results);
+    // // jason: timing start for deserialization (timing done in parseInput directly)
+    // timing_start(ExecQueryAndProcessResults_parse_results);
     parseInput(conn);
-    timing_end(ExecQueryAndProcessResults_parse_results);
+    // timing_end(ExecQueryAndProcessResults_parse_results);
 
     /* If not ready to return something, block until we are. */
 	while (conn->asyncStatus == PGASYNC_BUSY)
@@ -2101,14 +2104,13 @@ PQgetResult(PGconn *conn)
 		 * EOF indication.  We expect therefore that this won't result in any
 		 * undue delay in reporting a previous write failure.)
 		 */
-        // jason: time pqWait which will eventually block on poll/select
-        int pqWaitResult;
-        int pqReadDataResult;
+        // // jason: time pqWait which will eventually block on poll/select, now calling it PG_FE_WAIT, timed within that func
+        // int pqWaitResult;
+        // int pqReadDataResult;
 
         if (flushResult ||
-            (timing_start(PG_WAIT), pqWaitResult = pqWait(true, false, conn), timing_end(PG_WAIT), pqWaitResult) ||
-            (timing_start(ExecQueryAndProcessResults_read_data), pqReadDataResult = pqReadData(conn),
-             timing_end(ExecQueryAndProcessResults_read_data), pqReadDataResult < 0))
+            (pqWait(true, false, conn)) ||
+            (pqReadData(conn) < 0))
         {
             /* Report the error saved by pqWait or pqReadData */
 			pqSaveErrorResult(conn);
@@ -2118,10 +2120,10 @@ PQgetResult(PGconn *conn)
 
         /* Parse it. */
 
-        // jason: timing start for deserialization
-        timing_start(ExecQueryAndProcessResults_parse_results);
+        // // jason: timing start for deserialization (timing done in parseInput directly)
+        // timing_start(ExecQueryAndProcessResults_parse_results);
         parseInput(conn);
-        timing_end(ExecQueryAndProcessResults_parse_results);
+        // timing_end(ExecQueryAndProcessResults_parse_results);
 
         /*
 		 * If we had a write error, but nothing above obtained a query result

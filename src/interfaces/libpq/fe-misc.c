@@ -29,6 +29,7 @@
  */
 
 #include "postgres_fe.h"
+#include "time_instr.h"
 
 #include <signal.h>
 #include <time.h>
@@ -593,10 +594,15 @@ pqReadData(PGconn *conn)
 	int			someread = 0;
 	int			nread;
 
-	if (conn->sock == PGINVALID_SOCKET)
+    // jason: Start timing for PG FE socket read
+    timing_start(PG_FE_SOCK_READ);
+
+    if (conn->sock == PGINVALID_SOCKET)
 	{
 		libpq_append_conn_error(conn, "connection not open");
-		return -1;
+        /* Stop timing instrumentation before returning */
+        timing_end(PG_FE_SOCK_READ);
+        return -1;
 	}
 
 	/* Left-justify any data in the buffer to make room */
@@ -633,11 +639,15 @@ pqReadData(PGconn *conn)
 			 * We don't insist that the enlarge worked, but we need some room
 			 */
 			if (conn->inBufSize - conn->inEnd < 100)
-				return -1;		/* errorMessage already set */
-		}
-	}
+            {
+                /* Stop timing instrumentation before returning */
+                timing_end(PG_FE_SOCK_READ);
+                return -1; /* errorMessage already set */
+            }
+        }
+    }
 
-	/* OK, try to read some data */
+    /* OK, try to read some data */
 retry3:
 	nread = pqsecure_read(conn, conn->inBuffer + conn->inEnd,
 						  conn->inBufSize - conn->inEnd);
@@ -651,11 +661,15 @@ retry3:
 				/* Some systems return EAGAIN/EWOULDBLOCK for no data */
 #ifdef EAGAIN
 			case EAGAIN:
-				return someread;
+                /* Stop timing instrumentation before returning */
+                timing_end(PG_FE_SOCK_READ);
+                return someread;
 #endif
 #if defined(EWOULDBLOCK) && (!defined(EAGAIN) || (EWOULDBLOCK != EAGAIN))
 			case EWOULDBLOCK:
-				return someread;
+                /* Stop timing instrumentation before returning */
+                timing_end(PG_FE_READ_DATA);
+                return someread;
 #endif
 
 				/* We might get ECONNRESET etc here if connection failed */
@@ -664,7 +678,9 @@ retry3:
 
 			default:
 				/* pqsecure_read set the error message for us */
-				return -1;
+                /* Stop timing instrumentation before returning */
+                timing_end(PG_FE_SOCK_READ);
+                return -1;
 		}
 	}
 	if (nread > 0)
@@ -689,13 +705,20 @@ retry3:
 			someread = 1;
 			goto retry3;
 		}
-		return 1;
+        /* Stop timing instrumentation before returning */
+        timing_end(PG_FE_SOCK_READ);
+        return 1;
 	}
 
 	if (someread)
-		return 1;				/* got a zero read after successful tries */
+    {
+        /* got a zero read after successful tries */
+        /* Stop timing instrumentation before returning */
+        timing_end(PG_FE_SOCK_READ);
+        return 1;
+    }
 
-	/*
+    /*
 	 * A return value of 0 could mean just that no data is now available, or
 	 * it could mean EOF --- that is, the server has closed the connection.
 	 * Since we have the socket in nonblock mode, the only way to tell the
@@ -713,14 +736,20 @@ retry3:
 
 #ifdef USE_SSL
 	if (conn->ssl_in_use)
-		return 0;
+    {
+        /* Stop timing instrumentation before returning */
+        timing_end(PG_FE_SOCK_READ);
+        return 0;
+    }
 #endif
 
 	switch (pqReadReady(conn))
 	{
 		case 0:
 			/* definitely no data available */
-			return 0;
+            /* Stop timing instrumentation before returning */
+            timing_end(PG_FE_SOCK_READ);
+            return 0;
 		case 1:
 			/* ready for read */
 			break;
@@ -746,11 +775,15 @@ retry4:
 				/* Some systems return EAGAIN/EWOULDBLOCK for no data */
 #ifdef EAGAIN
 			case EAGAIN:
-				return 0;
+                /* Stop timing instrumentation before returning */
+                timing_end(PG_FE_SOCK_READ);
+                return 0;
 #endif
 #if defined(EWOULDBLOCK) && (!defined(EAGAIN) || (EWOULDBLOCK != EAGAIN))
 			case EWOULDBLOCK:
-				return 0;
+                /* Stop timing instrumentation before returning */
+                timing_end(PG_FE_READ_DATA);
+                return 0;
 #endif
 
 				/* We might get ECONNRESET etc here if connection failed */
@@ -759,13 +792,17 @@ retry4:
 
 			default:
 				/* pqsecure_read set the error message for us */
-				return -1;
+                /* Stop timing instrumentation before returning */
+                timing_end(PG_FE_SOCK_READ);
+                return -1;
 		}
 	}
 	if (nread > 0)
 	{
 		conn->inEnd += nread;
-		return 1;
+        /* Stop timing instrumentation before returning */
+        timing_end(PG_FE_SOCK_READ);
+        return 1;
 	}
 
 	/*
@@ -782,7 +819,10 @@ definitelyFailed:
 	/* Do *not* drop any already-read data; caller still wants it */
 	pqDropConnection(conn, false);
 	conn->status = CONNECTION_BAD;	/* No more connection to backend */
-	return -1;
+
+    /* Stop timing instrumentation before returning */
+    timing_end(PG_FE_SOCK_READ);
+    return -1;
 }
 
 /*
@@ -813,7 +853,10 @@ pqSendSome(PGconn *conn, int len)
 	int			remaining = conn->outCount;
 	int			result = 0;
 
-	/*
+    // jason: Start timing for PG FE socket write
+    timing_start(PG_FE_SOCK_WRITE);
+
+    /*
 	 * If we already had a write failure, we will never again try to send data
 	 * on that connection.  Even if the kernel would let us, we've probably
 	 * lost message boundary sync with the server.  conn->write_failed
@@ -830,9 +873,15 @@ pqSendSome(PGconn *conn, int len)
 		if (conn->sock != PGINVALID_SOCKET)
 		{
 			if (pqReadData(conn) < 0)
-				return -1;
-		}
-		return 0;
+            {
+                /* Stop timing instrumentation before returning */
+                timing_end(PG_FE_SOCK_WRITE);
+                return -1;
+            }
+        }
+        /* Stop timing instrumentation before returning */
+        timing_end(PG_FE_SOCK_WRITE);
+        return 0;
 	}
 
 	if (conn->sock == PGINVALID_SOCKET)
@@ -843,7 +892,9 @@ pqSendSome(PGconn *conn, int len)
 		conn->write_err_msg = strdup(libpq_gettext("connection not open\n"));
 		/* Discard queued data; no chance it'll ever be sent */
 		conn->outCount = 0;
-		return 0;
+        /* Stop timing instrumentation before returning */
+        timing_end(PG_FE_SOCK_WRITE);
+        return 0;
 	}
 
 	/* while there's still data to send */
@@ -887,8 +938,12 @@ pqSendSome(PGconn *conn, int len)
 					if (conn->sock != PGINVALID_SOCKET)
 					{
 						if (pqReadData(conn) < 0)
-							return -1;
-					}
+                        {
+                            /* Stop timing instrumentation before returning */
+                            timing_end(PG_FE_SOCK_WRITE);
+                            return -1;
+                        }
+                    }
 
 					/*
 					 * Lower-level code should already have filled
@@ -898,10 +953,18 @@ pqSendSome(PGconn *conn, int len)
 					 * dealt with later.  Otherwise, report the error now.
 					 */
 					if (conn->write_failed)
-						return 0;
-					else
-						return -1;
-			}
+                    {
+                        /* Stop timing instrumentation before returning */
+                        timing_end(PG_FE_SOCK_WRITE);
+                        return 0;
+                    }
+                    else
+                    {
+                        /* Stop timing instrumentation before returning */
+                        timing_end(PG_FE_SOCK_WRITE);
+                        return -1;
+                    }
+            }
 		}
 		else
 		{
@@ -964,7 +1027,9 @@ pqSendSome(PGconn *conn, int len)
 		memmove(conn->outBuffer, ptr, remaining);
 	conn->outCount = remaining;
 
-	return result;
+    /* Stop timing instrumentation before returning */
+    timing_end(PG_FE_SOCK_WRITE);
+    return result;
 }
 
 
@@ -1124,9 +1189,12 @@ PQsocketPoll(int sock, int forRead, int forWrite, pg_usec_time_t end_time)
 	if (!forRead && !forWrite)
 		return 0;
 
-	input_fd.fd = sock;
-	input_fd.events = POLLERR;
-	input_fd.revents = 0;
+    // jason: this func should also be considered PG_WAIT, since it waits on a socket with poll or select
+    timing_start(PG_FE_WAIT);
+
+    input_fd.fd = sock;
+    input_fd.events = POLLERR;
+    input_fd.revents = 0;
 
 	if (forRead)
 		input_fd.events |= POLLIN;
@@ -1148,7 +1216,10 @@ PQsocketPoll(int sock, int forRead, int forWrite, pg_usec_time_t end_time)
 			timeout_ms = 0;
 	}
 
-	return poll(&input_fd, 1, timeout_ms);
+    /* Call poll() and mark the end of the wait instrumentation */
+    int pollres = poll(&input_fd, 1, timeout_ms);
+    timing_end(PG_FE_WAIT);
+    return pollres;
 #else							/* !HAVE_POLL */
 
 	fd_set		input_mask;
@@ -1160,10 +1231,13 @@ PQsocketPoll(int sock, int forRead, int forWrite, pg_usec_time_t end_time)
 	if (!forRead && !forWrite)
 		return 0;
 
-	FD_ZERO(&input_mask);
-	FD_ZERO(&output_mask);
-	FD_ZERO(&except_mask);
-	if (forRead)
+    // jason: this func should also be considered PG_WAIT, since it waits on a socket with poll or select
+    timing_start(PG_FE_WAIT);
+
+    FD_ZERO(&input_mask);
+    FD_ZERO(&output_mask);
+    FD_ZERO(&except_mask);
+    if (forRead)
 		FD_SET(sock, &input_mask);
 
 	if (forWrite)
@@ -1196,8 +1270,9 @@ PQsocketPoll(int sock, int forRead, int forWrite, pg_usec_time_t end_time)
 		ptr_timeout = &timeout;
 	}
 
-	return select(sock + 1, &input_mask, &output_mask,
-				  &except_mask, ptr_timeout);
+    int selres = select(sock + 1, &input_mask, &output_mask, &except_mask, ptr_timeout);
+    timing_end(PG_FE_WAIT);
+    return selres;
 #endif							/* HAVE_POLL */
 }
 

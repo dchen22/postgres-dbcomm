@@ -26,6 +26,14 @@
  * push pair: DestReceiver_All & ExecutePlanIntoDestReceiver_ executing and pushing intermediate results
  *   - target receive via copy: ReceiveViaCopy_ & ReceiveAndWriteCopyData_ receiving and writing to file
  */
+
+// parseInput: examines whatever bytes pqReadData() already placed in conn->inBuffer. For each message it sees, it pulls
+// the type/length header, confirms the entire payload is buffered, dispatches to the appropriate handler to update
+// PGconn state/results (and notification/error queues), and then loops. If the payload isn’t fully buffered yet, the
+// function just returns immediately; it’s the caller’s job to call pqReadData()/PQconsumeInput() (and, if needed,
+// pqWait()) to bring in more bytes before invoking pqParseInput3() again.
+// NOTE: no socket IO here
+
 // DoCopyFromLocalTableIntoShards: the actual loop that copies data
 // CitusSendTupleToPlacements_: serializing and sending out the tuple
 // SendViaCopy_: calls FileReadCompat to read from file and just send
@@ -34,10 +42,17 @@
 // ReceiveResults_HeapFormTuple happens during ReceiveResults_BuildTuples, and is a PG call, subtracting its time
 // reflects the rest of deserialzation time
 
-// XACT_TS_WaitForConnections consists of 2 scenarios:
+// GetRemoteCommandResult and WaitForConnections are closely related: they both waits for workers to ACK the command
+// sent to them by the coordinator (during a xact)
 #define TIMING_SPOTS(X)                                                                                                \
     X(PG_WAIT)                                                                                                         \
     X(PG_WAIT_DONT_COUNT)                                                                                              \
+    X(PG_FE_WAIT)                                                                                                      \
+    X(PG_FE_SOCK_READ)                                                                                                 \
+    X(PG_FE_SOCK_WRITE)                                                                                                \
+    X(PG_BE_SOCK_READ)                                                                                                 \
+    X(PG_BE_SOCK_WRITE)                                                                                                \
+    X(PG_parseInput)                                                                                                   \
                                                                                                                        \
     X(ExecSimpleQuery)                                                                                                 \
     X(ParseQuery)                                                                                                      \
