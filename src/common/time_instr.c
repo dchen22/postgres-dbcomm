@@ -32,11 +32,42 @@ typedef struct
 } timer_stat_t;
 
 // Global state for the logger
+// static struct
+// {
+//     int num_timers;
+//     timer_stat_t *stats;
+// } logger_state = {0, NULL};
 static struct
 {
     int num_timers;
     timer_stat_t *stats;
-} logger_state = {0, NULL};
+    bool in_distributed_xact;
+} logger_state = {0, NULL, false};
+
+/**
+ * @brief Returns true if a timing spot should persist across a distributed transaction.
+ *
+ * These timers span multiple commands and must not be reset while a distributed
+ * transaction is active.
+ */
+static bool
+IsTransactionalTimingSpot(int timer_id)
+{
+    switch (timer_id)
+    {
+        case XACT_PROCESSING:
+        case XACT_TS_SendRemoteCommand:
+        case XACT_TS_GetRemoteCommandResult:
+        case XACT_TS_WaitForConnections:
+        case XACT_TS_coordinated_commit_abort:
+        case XACT_TS_EndCommand:
+        case XACT_TS_CoordinatorPrepare:
+        case XACT_WAIT:
+            return true;
+        default:
+            return false;
+    }
+}
 
 #ifndef FRONTEND
 typedef struct LoggerSharedState
@@ -92,6 +123,18 @@ int logger_init(int num_timers, const char *names[])
     }
 
     return 0;
+}
+
+/**
+ * @brief Updates whether the logger is inside a distributed transaction.
+ *
+ * This flag controls whether logger_print_timings/logger_reset preserve
+ * transactional timers across commands.
+ */
+void
+logger_set_distributed_xact_state(bool in_distributed_xact)
+{
+    logger_state.in_distributed_xact = in_distributed_xact;
 }
 
 /**
@@ -256,6 +299,7 @@ void logger_print_timings(void)
 }
 #endif /* Legacy logger_print_timings() */
 
+#if 0
 /**
  * @brief Emit timing statistics through elog() so each report is unbuffered.
  *
@@ -388,8 +432,149 @@ void logger_print_timings(void)
     pthread_mutex_unlock(&logger_print_mutex);
 #endif
 }
+#endif /* disabled logger_print_timings */
+
+/**
+ * @brief Emit timing statistics through elog() so each report is unbuffered.
+ *
+ * When inside a distributed transaction, only non-transactional timers are
+ * printed and reset so XACT_* timers can span multiple commands.
+ */
+void logger_print_timings(void)
+{
+    /* Acquire mutex to ensure logger_print_timings is not called concurrently. */
+#ifndef FRONTEND
+    if (logger_shared == NULL)
+    {
+        return;
+    }
+
+    if (logger_state.stats == NULL)
+    {
+        /* Protect the elog() call so concurrent processes don't mix messages. */
+        LWLockAcquire(&logger_shared->lock, LW_EXCLUSIVE);
+        elog(LOG, "Logger not initialized");
+        LWLockRelease(&logger_shared->lock);
+        return;
+    }
+#else
+    if (pthread_mutex_lock(&logger_print_mutex) != 0)
+    {
+        fprintf(stderr, "Failed to acquire logger_print_timings mutex\n");
+        fflush(stderr);
+        return;
+    }
+
+    if (logger_state.stats == NULL)
+    {
+        fprintf(stderr, "Logger not initialized\n");
+        fflush(stderr);
+        pthread_mutex_unlock(&logger_print_mutex);
+        return;
+    }
+#endif
+
+    /* If nothing has been recorded (no timer has a non-zero count),
+       do not print anything at all. */
+    int any_recorded = 0;
+    for (int i = 0; i < logger_state.num_timers; ++i)
+    {
+        bool include_timer = true;
+        if (logger_state.in_distributed_xact)
+        {
+            include_timer = !IsTransactionalTimingSpot(i);
+        }
+
+        if (include_timer && logger_state.stats[i].count > 0)
+        {
+            any_recorded = 1;
+            break;
+        }
+    }
+    if (!any_recorded)
+    {
+#ifdef FRONTEND
+        pthread_mutex_unlock(&logger_print_mutex);
+#endif
+        return;
+    }
+
+    /* Compose the full report before logging so a single elog() call emits it atomically. */
+    StringInfoData buf;
+    initStringInfo(&buf);
+
+    appendStringInfoString(&buf, "\n--- Timing Report (Nanoseconds) ---\n");
+    appendStringInfo(&buf, "%-30s | %10s | %18s | %18s | %s\n", "Timer Name", "Count", "Total Time (ns)",
+                     "Average Time (ns)", "Custom Stats");
+    appendStringInfoString(
+        &buf,
+        "----------------------------------------------------------------------------------------------------------"
+        "-\n");
+
+    for (int i = 0; i < logger_state.num_timers; ++i)
+    {
+        timer_stat_t *stat = &logger_state.stats[i];
+        bool include_timer = true;
+        if (logger_state.in_distributed_xact)
+        {
+            include_timer = !IsTransactionalTimingSpot(i);
+        }
+
+        if (!include_timer || stat->count == 0)
+            continue;
+
+        // Use nanoseconds for both total and average
+        uint64_t total_ns = stat->total_ns;
+        uint64_t avg_ns = stat->count ? (stat->total_ns / stat->count) : 0;
+
+        appendStringInfo(&buf, "%-30s | %10llu | %18llu | %18llu | ", stat->name, (unsigned long long)stat->count,
+                         (unsigned long long)total_ns, (unsigned long long)avg_ns);
+
+        /* Print custom stats in comma-separated key=value format */
+        int first = 1;
+        int j;
+        for (j = 0; j < _NUM_CUSTOM_STATS; ++j)
+        {
+            /* Only print non-zero stats */
+            if (stat->custom_stats[j] > 0)
+            {
+                if (!first)
+                {
+                    appendStringInfoString(&buf, ", ");
+                }
+                appendStringInfo(&buf, "%s=%llu", custom_stat_names[j], (unsigned long long)stat->custom_stats[j]);
+                first = 0;
+            }
+        }
+        appendStringInfoChar(&buf, '\n');
+    }
+    appendStringInfoString(
+        &buf,
+        "----------------------------------------------------------------------------------------------------------"
+        "-\n");
+
+#ifndef FRONTEND
+    /* Acquire the LWLock only while emitting the final elog() so output order remains deterministic. */
+    LWLockAcquire(&logger_shared->lock, LW_EXCLUSIVE);
+    elog(LOG_SERVER_ONLY, "%s", buf.data);
+    LWLockRelease(&logger_shared->lock);
+#else
+    fprintf(stderr, "%s\n", buf.data);
+    fflush(stderr);
+#endif
+
+    pfree(buf.data);
+
+    /* Reset after printing, respecting transactional timers if needed. */
+    logger_reset();
+
+#ifdef FRONTEND
+    pthread_mutex_unlock(&logger_print_mutex);
+#endif
+}
 
 // free and re-init the logger
+#if 0
 void logger_reset()
 {
     if (logger_state.stats != NULL)
@@ -398,6 +583,44 @@ void logger_reset()
         logger_state.stats = NULL;
         logger_state.num_timers = 0;
     }
+    logger_init(_NUM_TIMING_SPOTS, timing_spot_names);
+}
+#endif /* disabled logger_reset */
+
+/**
+ * @brief Reset timing stats based on distributed transaction state.
+ *
+ * When a distributed transaction is active, keep transactional timers intact
+ * and clear only non-transactional timers so they don't accumulate across commands.
+ */
+void logger_reset()
+{
+    if (logger_state.stats == NULL)
+    {
+        return;
+    }
+
+    if (logger_state.in_distributed_xact)
+    {
+        for (int i = 0; i < logger_state.num_timers; ++i)
+        {
+            if (IsTransactionalTimingSpot(i))
+                continue;
+
+            timer_stat_t *stat = &logger_state.stats[i];
+            stat->total_ns = 0;
+            stat->count = 0;
+            memset(&stat->start_time, 0, sizeof(stat->start_time));
+            memset(stat->custom_stats, 0, sizeof(stat->custom_stats));
+        }
+        return;
+    }
+
+    free(logger_state.stats);
+    logger_state.stats = NULL;
+    logger_state.num_timers = 0;
+    logger_state.in_distributed_xact = false;
+
     logger_init(_NUM_TIMING_SPOTS, timing_spot_names);
 }
 

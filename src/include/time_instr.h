@@ -17,6 +17,7 @@
 #ifndef LOGGER_H
 #define LOGGER_H
 
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <time.h>
@@ -75,16 +76,34 @@ void timing_end(int timer_id);
 void timing_add_stat(int timer_id, int stat_key, uint64_t value);
 
 /**
- * @brief Prints a formatted report of all timing measurements and cleans up resources.
+ * @brief Prints a formatted report of timing measurements and performs a reset.
  *
- * Displays the name, call count, total time, and average time for each timer.
- * This function also frees the memory allocated by logger_init().
+ * When a distributed transaction is active (see logger_set_distributed_xact_state),
+ * this function only prints non-transactional timers and only resets those.
+ * Otherwise it prints and resets all timers.
  */
 void logger_print_timings(void);
 
 void logger_cleanup();
 
+/**
+ * @brief Resets timing measurements based on distributed transaction state.
+ *
+ * If a distributed transaction is active, only non-transactional timers are
+ * cleared so transactional timers can span multiple commands. Otherwise all
+ * timers are cleared and reinitialized.
+ */
 void logger_reset();
+
+/**
+ * @brief Marks whether the logger is inside a distributed transaction.
+ *
+ * When set to true, logger_print_timings and logger_reset preserve transactional
+ * timer state across commands so XACT_* timers can span BEGIN/COMMIT.
+ *
+ * @param in_distributed_xact true when a distributed transaction is active.
+ */
+void logger_set_distributed_xact_state(bool in_distributed_xact);
 
 #ifndef FRONTEND
 size_t LoggerShmemSize(void);

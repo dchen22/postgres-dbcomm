@@ -5070,6 +5070,7 @@ PostgresMain(const char *dbname, const char *username)
         if (skip_query_str_print)
         {
             /* For specific internal queries, reset logger instead of printing */
+            ////jason: well maybe don't reset, this would mess up some timings for citus dist transactions
             logger_reset();
         }
         else
