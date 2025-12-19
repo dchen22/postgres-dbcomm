@@ -381,8 +381,8 @@ void logger_print_timings(void)
     logger_state.stats = NULL;
     logger_state.num_timers = 0;
 
-    // do logger init again just in case
-    logger_init(_NUM_TIMING_SPOTS, timing_spot_names);
+    // do logger init again to be clean and ready for the next round of logs
+    logger_reset();
 
 #ifdef FRONTEND
     pthread_mutex_unlock(&logger_print_mutex);

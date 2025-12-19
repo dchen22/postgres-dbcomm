@@ -40,7 +40,7 @@
 #include "executor/tstoreReceiver.h"
 #include "libpq/libpq.h"
 #include "libpq/pqformat.h"
-#include "timing_spots.h"
+#include "time_instr.h"
 
 /* ----------------
  *		dummy DestReceiver functions

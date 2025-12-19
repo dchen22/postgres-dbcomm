@@ -44,6 +44,9 @@
 
 // GetRemoteCommandResult and WaitForConnections are closely related: they both waits for workers to ACK the command
 // sent to them by the coordinator (during a xact)
+
+// xaction start its lifecycle with UseCoordinatedTransaction (I think true for all), and ends with
+// CoordinatedTransactionCallback (after commit/abort etc.). So timing for the whole xaction should be from there.
 #define TIMING_SPOTS(X)                                                                                                \
     X(PG_WAIT)                                                                                                         \
     X(PG_WAIT_DONT_COUNT)                                                                                              \
