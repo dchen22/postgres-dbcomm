@@ -116,6 +116,17 @@ void logger_set_distributed_xact_state(bool in_distributed_xact);
  */
 void logger_set_identity(const char *identity);
 
+/**
+ * @brief Controls whether the current identity should persist across commands.
+ *
+ * When set to true, logger_reset keeps the identity even when not in a
+ * distributed transaction, allowing explicit BEGIN/COMMIT blocks to retain
+ * the identity across multiple commands.
+ *
+ * @param persist true to keep identity across commands, false to clear on reset.
+ */
+void logger_set_identity_persist(bool persist);
+
 #ifndef FRONTEND
 size_t LoggerShmemSize(void);
 void LoggerShmemInit(void);

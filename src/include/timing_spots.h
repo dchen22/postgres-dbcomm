@@ -47,6 +47,9 @@
 
 // xaction start its lifecycle with UseCoordinatedTransaction (I think true for all), and ends with
 // CoordinatedTransactionCallback (after commit/abort etc.). So timing for the whole xaction should be from there.
+
+// XACT_TS_WaitForConnections: waits/sleeps for socket readiness and pulls data from socket until not busy anymore
+// should be followed by a later GetRemoteCommandResult() etc. which deserializes the socket bytes
 #define TIMING_SPOTS(X)                                                                                                \
     X(PG_WAIT)                                                                                                         \
     X(PG_WAIT_DONT_COUNT)                                                                                              \

@@ -37,13 +37,23 @@ typedef struct
 //     int num_timers;
 //     timer_stat_t *stats;
 // } logger_state = {0, NULL};
+/* Original logger_state without identity persistence. */
+// static struct
+// {
+//     int num_timers;
+//     timer_stat_t *stats;
+//     bool in_distributed_xact;
+//     char *identity;
+// } logger_state = {0, NULL, false, NULL};
+
 static struct
 {
     int num_timers;
     timer_stat_t *stats;
     bool in_distributed_xact;
     char *identity;
-} logger_state = {0, NULL, false, NULL};
+    bool identity_persist;
+} logger_state = {0, NULL, false, NULL, false};
 
 /**
  * @brief Returns true if a timing spot should persist across a distributed transaction.
@@ -158,6 +168,19 @@ logger_set_identity(const char *identity)
     }
 
     logger_state.identity = strdup(identity);
+}
+
+/**
+ * @brief Controls whether the current identity should persist across commands.
+ *
+ * When persist is true, logger_reset keeps the identity even when not in a
+ * distributed transaction so explicit BEGIN/COMMIT blocks stay tagged.
+ */
+void
+logger_set_identity_persist(bool persist)
+{
+    /* Keep identity until logger_reset clears it when persistence is disabled. */
+    logger_state.identity_persist = persist;
 }
 
 /**
@@ -483,6 +506,10 @@ void logger_reset()
 }
 #endif /* disabled logger_reset */
 
+/*
+ * Original logger_reset implementation without identity persistence.
+ */
+#if 0
 /**
  * @brief Reset timing stats based on distributed transaction state.
  *
@@ -517,6 +544,53 @@ void logger_reset()
     logger_state.num_timers = 0;
     logger_state.in_distributed_xact = false;
     if (logger_state.identity != NULL)
+    {
+        free(logger_state.identity);
+        logger_state.identity = NULL;
+    }
+
+    logger_init(_NUM_TIMING_SPOTS, timing_spot_names);
+}
+#endif /* disabled logger_reset without identity persistence */
+
+/**
+ * @brief Reset timing stats based on distributed transaction and identity state.
+ *
+ * When a distributed transaction is active, keep transactional timers intact
+ * and clear only non-transactional timers so they don't accumulate across commands.
+ * When not in a distributed transaction, reset all timers but preserve the
+ * identity if identity_persist is true.
+ */
+void logger_reset()
+{
+    if (logger_state.stats == NULL)
+    {
+        return;
+    }
+
+    if (logger_state.in_distributed_xact)
+    {
+        for (int i = 0; i < logger_state.num_timers; ++i)
+        {
+            if (IsTransactionalTimingSpot(i))
+                continue;
+
+            timer_stat_t *stat = &logger_state.stats[i];
+            stat->total_ns = 0;
+            stat->count = 0;
+            memset(&stat->start_time, 0, sizeof(stat->start_time));
+            memset(stat->custom_stats, 0, sizeof(stat->custom_stats));
+        }
+        return;
+    }
+
+    /* Full reset for non-distributed commands, but keep identity if requested. */
+    free(logger_state.stats);
+    logger_state.stats = NULL;
+    logger_state.num_timers = 0;
+    logger_state.in_distributed_xact = false;
+
+    if (!logger_state.identity_persist && logger_state.identity != NULL)
     {
         free(logger_state.identity);
         logger_state.identity = NULL;
