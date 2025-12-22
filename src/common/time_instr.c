@@ -42,7 +42,8 @@ static struct
     int num_timers;
     timer_stat_t *stats;
     bool in_distributed_xact;
-} logger_state = {0, NULL, false};
+    char *identity;
+} logger_state = {0, NULL, false, NULL};
 
 /**
  * @brief Returns true if a timing spot should persist across a distributed transaction.
@@ -135,6 +136,28 @@ void
 logger_set_distributed_xact_state(bool in_distributed_xact)
 {
     logger_state.in_distributed_xact = in_distributed_xact;
+}
+
+/**
+ * @brief Set or clear an identity string for timing reports.
+ *
+ * The identity is copied so callers can pass stack-allocated buffers.
+ */
+void
+logger_set_identity(const char *identity)
+{
+    if (logger_state.identity != NULL)
+    {
+        free(logger_state.identity);
+        logger_state.identity = NULL;
+    }
+
+    if (identity == NULL || identity[0] == '\0')
+    {
+        return;
+    }
+
+    logger_state.identity = strdup(identity);
 }
 
 /**
@@ -366,6 +389,10 @@ void logger_print_timings(void)
     initStringInfo(&buf);
 
     appendStringInfoString(&buf, "\n--- Timing Report (Nanoseconds) ---\n");
+    if (logger_state.identity != NULL)
+    {
+        appendStringInfo(&buf, "DistributedTransactionId: %s\n", logger_state.identity);
+    }
     appendStringInfo(&buf, "%-30s | %10s | %18s | %18s | %s\n", "Timer Name", "Count", "Total Time (ns)",
                      "Average Time (ns)", "Custom Stats");
     appendStringInfoString(
@@ -620,6 +647,11 @@ void logger_reset()
     logger_state.stats = NULL;
     logger_state.num_timers = 0;
     logger_state.in_distributed_xact = false;
+    if (logger_state.identity != NULL)
+    {
+        free(logger_state.identity);
+        logger_state.identity = NULL;
+    }
 
     logger_init(_NUM_TIMING_SPOTS, timing_spot_names);
 }

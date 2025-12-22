@@ -105,6 +105,17 @@ void logger_reset();
  */
 void logger_set_distributed_xact_state(bool in_distributed_xact);
 
+/**
+ * @brief Sets an identity string to associate timing reports with a transaction.
+ *
+ * Passing NULL clears the identity. This is used to tag timing reports with a
+ * distributed transaction id when available, and is a no-op for non-transactional
+ * logging.
+ *
+ * @param identity A string to copy, or NULL to clear.
+ */
+void logger_set_identity(const char *identity);
+
 #ifndef FRONTEND
 size_t LoggerShmemSize(void);
 void LoggerShmemInit(void);
