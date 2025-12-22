@@ -391,11 +391,15 @@ void logger_print_timings(void)
     StringInfoData buf;
     initStringInfo(&buf);
 
-    appendStringInfoString(&buf, "\n--- Timing Report (Nanoseconds) ---\n");
     if (logger_state.identity != NULL)
     {
         appendStringInfo(&buf, "DistributedTransactionId: %s\n", logger_state.identity);
     }
+    else
+    {
+        appendStringInfoString(&buf, "DistributedTransactionId: \n");
+    }
+    appendStringInfoString(&buf, "\n--- Timing Report (Nanoseconds) ---\n");
     appendStringInfo(&buf, "%-30s | %10s | %18s | %18s | %s\n", "Timer Name", "Count", "Total Time (ns)",
                      "Average Time (ns)", "Custom Stats");
     appendStringInfoString(
