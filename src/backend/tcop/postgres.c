@@ -85,6 +85,8 @@
 
 #include "time_instr.h"
 
+#define PERF_CONTROL_FIFO_PATH "/tmp/perf_ctl"
+
 /* ----------------
  *		global variables
  * ----------------
@@ -147,6 +149,15 @@ static char *stack_base_ptr = NULL;
 static bool xact_started = false;
 
 /*
+ * Track whether this backend has successfully enabled the external perf capture.
+ *
+ * The control FIFO toggles node-wide perf recording, so we only keep this state
+ * local to decide whether this backend should attempt the matching disable after
+ * the corresponding ReadyForQuery() flush completes.
+ */
+static bool PerfControlCaptureActive = false;
+
+/*
  * Flag to indicate that we are doing the outer loop's read-from-client,
  * as opposed to any random read from client that might happen within
  * commands like COPY FROM STDIN.
@@ -203,6 +214,11 @@ static void drop_unnamed_stmt(void);
 static void log_disconnections(int code, Datum arg);
 static void enable_statement_timeout(void);
 static void disable_statement_timeout(void);
+static bool PerfControlWriteCommand(const char *command, size_t commandLength,
+									bool logFailures);
+static void PerfControlEnableIfNeeded(void);
+static void PerfControlDisableIfNeeded(void);
+static void PerfControlOnProcExit(int code, Datum arg);
 
 
 /* ----------------------------------------------------------------
@@ -504,6 +520,156 @@ ReadCommand(StringInfo inBuf)
 	else
 		result = InteractiveBackend(inBuf);
 	return result;
+}
+
+/*
+ * PerfControlWriteCommand writes a small enable/disable command to the external
+ * perf control FIFO without ever blocking the backend.
+ *
+ * We intentionally open the FIFO with O_NONBLOCK because perf is optional
+ * external tooling. If perf record is not attached to the FIFO, we log the
+ * failure and continue query execution rather than stalling the backend.
+ */
+static bool
+PerfControlWriteCommand(const char *command, size_t commandLength, bool logFailures)
+{
+	int			perfControlFd = -1;
+	size_t		totalWritten = 0;
+
+	perfControlFd = open(PERF_CONTROL_FIFO_PATH, O_WRONLY | O_NONBLOCK);
+	if (perfControlFd < 0)
+	{
+		if (logFailures)
+		{
+			log_message("perf control open failed for %s: %m",
+						PERF_CONTROL_FIFO_PATH);
+		}
+		return false;
+	}
+
+	while (totalWritten < commandLength)
+	{
+		ssize_t		writtenBytes = write(perfControlFd,
+										 command + totalWritten,
+										 commandLength - totalWritten);
+
+		if (writtenBytes < 0)
+		{
+			if (errno == EINTR)
+			{
+				/* Retry interrupted writes so the tiny FIFO command stays atomic. */
+				continue;
+			}
+
+			if (logFailures)
+			{
+				log_message("perf control write failed for %s: %m",
+							PERF_CONTROL_FIFO_PATH);
+			}
+
+			(void) close(perfControlFd);
+			return false;
+		}
+
+		if (writtenBytes == 0)
+		{
+			if (logFailures)
+			{
+				log_message("perf control write wrote 0 bytes to %s",
+							PERF_CONTROL_FIFO_PATH);
+			}
+
+			(void) close(perfControlFd);
+			return false;
+		}
+
+		totalWritten += writtenBytes;
+	}
+
+	if (close(perfControlFd) != 0 && logFailures)
+	{
+		log_message("perf control close failed for %s: %m",
+					PERF_CONTROL_FIFO_PATH);
+	}
+
+	return true;
+}
+
+/*
+ * PerfControlEnableIfNeeded enables the external perf capture for a simple
+ * query once the backend has already accepted the query message and is about to
+ * execute it.
+ */
+static void
+PerfControlEnableIfNeeded(void)
+{
+	static const char PerfEnableCommand[] = "enable\n";
+
+	if (PerfControlCaptureActive)
+	{
+		return;
+	}
+
+	if (PerfControlWriteCommand(PerfEnableCommand,
+								sizeof(PerfEnableCommand) - 1,
+								true))
+	{
+		PerfControlCaptureActive = true;
+	}
+}
+
+/*
+ * PerfControlDisableIfNeeded disables the external perf capture after the
+ * backend has finished the matching ReadyForQuery() flush.
+ *
+ * We clear the local active flag even if the disable write fails so subsequent
+ * simple queries can still attempt to re-enable perf if the external recorder
+ * was restarted.
+ */
+static void
+PerfControlDisableIfNeeded(void)
+{
+	static const char PerfDisableCommand[] = "disable\n";
+
+	if (!PerfControlCaptureActive)
+	{
+		return;
+	}
+
+	PerfControlCaptureActive = false;
+
+	(void) PerfControlWriteCommand(PerfDisableCommand,
+								   sizeof(PerfDisableCommand) - 1,
+								   true);
+}
+
+/*
+ * PerfControlOnProcExit is a last-resort cleanup hook to stop perf capture if
+ * this backend exits while still believing it enabled the FIFO-controlled
+ * recorder.
+ */
+static void
+PerfControlOnProcExit(int code, Datum arg)
+{
+	(void) code;
+	(void) arg;
+
+	static const char PerfDisableCommand[] = "disable\n";
+
+	if (!PerfControlCaptureActive)
+	{
+		return;
+	}
+
+	PerfControlCaptureActive = false;
+
+	/*
+	 * Avoid extra logging during backend exit paths. The main query lifecycle
+	 * already logs failures on explicit enable/disable attempts.
+	 */
+	(void) PerfControlWriteCommand(PerfDisableCommand,
+								   sizeof(PerfDisableCommand) - 1,
+								   false);
 }
 
 /*
@@ -4357,6 +4523,13 @@ PostgresMain(const char *dbname, const char *username)
 	if (IsUnderPostmaster && Log_disconnections)
 		on_proc_exit(log_disconnections, 0);
 
+	/*
+	 * Best-effort cleanup for FIFO-controlled perf capture. This protects the
+	 * one-backend-per-node workflow from leaving perf enabled after an abnormal
+	 * backend exit.
+	 */
+	on_proc_exit(PerfControlOnProcExit, 0);
+
 	pgstat_report_connect(MyDatabaseId);
 
 	/* Perform initialization specific to a WAL sender process. */
@@ -4698,7 +4871,13 @@ PostgresMain(const char *dbname, const char *username)
 			}
 			PG_END_TRY();
 
-            send_ready_for_query = false;
+			/*
+			 * Keep perf enabled until after ReadyForQuery() flushes the final
+			 * client-visible output for the simple query.
+			 */
+			PerfControlDisableIfNeeded();
+
+			send_ready_for_query = false;
 		}
 
 		/*
@@ -4786,38 +4965,42 @@ PostgresMain(const char *dbname, const char *username)
 					query_string = pq_getmsgstring(&input_message);
 					pq_getmsgend(&input_message);
 
-                    /*
-                     * If the query string (after skipping leading whitespace)
-                     * starts with "SELECT gid" or "SELECT waiting_pid",
-                     * then at the end of the loop we should not call
-                     * logger_print_timings(); instead call logger_reset().
-                     */
-                    {
-                        const char *qs = query_string;
-                        while (qs && *qs && isspace((unsigned char)*qs))
-                            qs++;
-                        if (qs && (strncmp(qs, "SELECT gid", 10) == 0 || strncmp(qs, "SELECT waiting_pid", 18) == 0))
-                            skip_query_str_print = true;
-                        else
-                            skip_query_str_print = false;
-                    }
+						/*
+						 * If the query string (after skipping leading whitespace)
+						 * starts with "SELECT gid" or "SELECT waiting_pid",
+						 * then at the end of the loop we should not call
+						 * logger_print_timings(); instead call logger_reset().
+						 */
+						{
+							const char *qs = query_string;
+							while (qs && *qs && isspace((unsigned char) *qs))
+								qs++;
+							if (qs && (strncmp(qs, "SELECT gid", 10) == 0 ||
+									   strncmp(qs, "SELECT waiting_pid", 18) == 0))
+								skip_query_str_print = true;
+							else
+								skip_query_str_print = false;
+						}
 
-                    // jason: timing the execution of a query (coordinator side should be full query time)
-                    timing_start(ExecSimpleQuery);
-                    if (am_walsender)
-					{
-						if (!exec_replication_command(query_string))
+						/* perf capture starts at backend execution, not at client read. */
+						PerfControlEnableIfNeeded();
+
+						// jason: timing the execution of a query (coordinator side should be full query time)
+						timing_start(ExecSimpleQuery);
+						if (am_walsender)
+						{
+							if (!exec_replication_command(query_string))
+								exec_simple_query(query_string);
+						}
+						else
 							exec_simple_query(query_string);
-					}
-					else
-						exec_simple_query(query_string);
 
-                    // jason: end timing
-                    timing_end(ExecSimpleQuery);
-                    if (!skip_query_str_print)
-                        log_message("Query executed: %s", query_string);
+						// jason: end timing
+						timing_end(ExecSimpleQuery);
+						if (!skip_query_str_print)
+							log_message("Query executed: %s", query_string);
 
-                    valgrind_report_error_query(query_string);
+						valgrind_report_error_query(query_string);
 
 					send_ready_for_query = true;
 				}
