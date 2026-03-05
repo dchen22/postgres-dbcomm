@@ -29,6 +29,7 @@ extern PGDLLIMPORT const char *debug_query_string;
 extern PGDLLIMPORT int max_stack_depth;
 extern PGDLLIMPORT int PostAuthDelay;
 extern PGDLLIMPORT int client_connection_check_interval;
+extern PGDLLIMPORT bool pg_wait_dont_count_active;
 
 /* GUC-configurable parameters */
 

@@ -108,6 +108,8 @@ int			PostAuthDelay = 0;
 /* Time between checks that the client is still connected. */
 int			client_connection_check_interval = 0;
 
+bool		pg_wait_dont_count_active = false;
+
 /* flags for non-system relation kinds to restrict use */
 int			restrict_nonsystem_relation_kind;
 
@@ -4685,12 +4687,16 @@ PostgresMain(const char *dbname, const char *username)
 			/* Report any recently-changed GUC options */
 			ReportChangedGUCOptions();
 
-            // jason: there might be a tiny PG wait in here due to pq_flush
-            timing_start(PG_WAIT_DONT_COUNT);
-
-            ReadyForQuery(whereToSendOutput);
-
-            timing_end(PG_WAIT_DONT_COUNT);
+			pg_wait_dont_count_active = true;
+			PG_TRY();
+			{
+				ReadyForQuery(whereToSendOutput);
+			}
+			PG_FINALLY();
+			{
+				pg_wait_dont_count_active = false;
+			}
+			PG_END_TRY();
 
             send_ready_for_query = false;
 		}
@@ -4706,12 +4712,16 @@ PostgresMain(const char *dbname, const char *username)
 		/*
 		 * (3) read a command (loop blocks here)
 		 */
-        // jason: start timing idle time (this is just waiting for queries from other nodes/client)
-        timing_start(PG_WAIT_DONT_COUNT);
-
-        firstchar = ReadCommand(&input_message);
-
-        timing_end(PG_WAIT_DONT_COUNT);
+			pg_wait_dont_count_active = true;
+			PG_TRY();
+			{
+				firstchar = ReadCommand(&input_message);
+			}
+			PG_FINALLY();
+			{
+				pg_wait_dont_count_active = false;
+			}
+			PG_END_TRY();
 
         /*
          * (4) turn off the idle-in-transaction and idle-session timeouts if

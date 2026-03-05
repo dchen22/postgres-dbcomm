@@ -34,6 +34,7 @@
 #include "storage/fd.h"
 #include "storage/latch.h"
 #include "tcop/tcopprot.h"
+#include "time_instr.h"
 #include "utils/builtins.h"
 #include "utils/memutils.h"
 
@@ -518,9 +519,11 @@ aloop:
 				else
 					waitfor = WL_SOCKET_WRITEABLE | WL_EXIT_ON_PM_DEATH;
 
-				(void) WaitLatchOrSocket(MyLatch, waitfor, port->sock, 0,
-										 WAIT_EVENT_SSL_OPEN_SERVER);
-				goto aloop;
+					timing_start(PG_WAIT);
+					(void) WaitLatchOrSocket(MyLatch, waitfor, port->sock, 0,
+											 WAIT_EVENT_SSL_OPEN_SERVER);
+					timing_end(PG_WAIT);
+					goto aloop;
 			case SSL_ERROR_SYSCALL:
 				if (r < 0 && errno != 0)
 					ereport(COMMERROR,

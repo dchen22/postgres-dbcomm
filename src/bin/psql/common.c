@@ -1488,6 +1488,8 @@ ExecQueryAndProcessResults(const char *query,
 
 		CheckConnection();
 
+		/* jason: ensure timing spot doesn't leak on error paths */
+		timing_end(ExecQueryAndProcessResults_func);
 		return -1;
 	}
 
@@ -1524,6 +1526,8 @@ ExecQueryAndProcessResults(const char *query,
 	if (is_watch && cancel_pressed)
 	{
 		ClearOrSaveAllResults();
+		/* jason: ensure timing spot doesn't leak on early-return paths */
+		timing_end(ExecQueryAndProcessResults_func);
 		return 0;
 	}
 
@@ -1833,10 +1837,18 @@ ExecQueryAndProcessResults(const char *query,
 
 	/* may need this to recover from conn loss during COPY */
 	if (!CheckConnection())
+	{
+		/* jason: ensure timing spot doesn't leak on connection-loss paths */
+		timing_end(ExecQueryAndProcessResults_func);
 		return -1;
+	}
 
 	if (cancel_pressed || return_early)
+	{
+		/* jason: ensure timing spot doesn't leak on early-return paths */
+		timing_end(ExecQueryAndProcessResults_func);
 		return 0;
+	}
 
     // jason: timing end for the whole func
     timing_end(ExecQueryAndProcessResults_func);

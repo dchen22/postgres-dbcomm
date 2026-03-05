@@ -666,10 +666,12 @@ retry3:
                 return someread;
 #endif
 #if defined(EWOULDBLOCK) && (!defined(EAGAIN) || (EWOULDBLOCK != EAGAIN))
-			case EWOULDBLOCK:
-                /* Stop timing instrumentation before returning */
-                timing_end(PG_FE_READ_DATA);
-                return someread;
+				case EWOULDBLOCK:
+	                /* Stop timing instrumentation before returning */
+					/* jason: PG_FE_READ_DATA is not a defined timing spot; end the socket-read timer. */
+	                /* timing_end(PG_FE_READ_DATA); */
+	                timing_end(PG_FE_SOCK_READ);
+	                return someread;
 #endif
 
 				/* We might get ECONNRESET etc here if connection failed */
@@ -780,10 +782,12 @@ retry4:
                 return 0;
 #endif
 #if defined(EWOULDBLOCK) && (!defined(EAGAIN) || (EWOULDBLOCK != EAGAIN))
-			case EWOULDBLOCK:
-                /* Stop timing instrumentation before returning */
-                timing_end(PG_FE_READ_DATA);
-                return 0;
+				case EWOULDBLOCK:
+	                /* Stop timing instrumentation before returning */
+					/* jason: PG_FE_READ_DATA is not a defined timing spot; end the socket-read timer. */
+	                /* timing_end(PG_FE_READ_DATA); */
+	                timing_end(PG_FE_SOCK_READ);
+	                return 0;
 #endif
 
 				/* We might get ECONNRESET etc here if connection failed */

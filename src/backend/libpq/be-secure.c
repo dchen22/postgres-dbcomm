@@ -210,18 +210,20 @@ retry:
 	if (n < 0 && !port->noblock && (errno == EWOULDBLOCK || errno == EAGAIN))
 	{
 		WaitEvent	event;
+		bool		measureDontCount = pg_wait_dont_count_active;
 
 		Assert(waitfor);
 
-        // jason: wait for socket read, can happen under COPY FROM, probably others too
-        timing_start(PG_WAIT);
+		timing_start(PG_WAIT);
+		if (measureDontCount)
+			timing_start(PG_WAIT_DONT_COUNT);
 
-        ModifyWaitEvent(FeBeWaitSet, FeBeWaitSetSocketPos, waitfor, NULL);
-
+		ModifyWaitEvent(FeBeWaitSet, FeBeWaitSetSocketPos, waitfor, NULL);
 		WaitEventSetWait(FeBeWaitSet, -1 /* no timeout */ , &event, 1,
 						 WAIT_EVENT_CLIENT_READ);
-
-        timing_end(PG_WAIT);
+		if (measureDontCount)
+			timing_end(PG_WAIT_DONT_COUNT);
+		timing_end(PG_WAIT);
 
         /*
 		 * If the postmaster has died, it's not safe to continue running,
@@ -346,18 +348,20 @@ retry:
 	if (n < 0 && !port->noblock && (errno == EWOULDBLOCK || errno == EAGAIN))
 	{
 		WaitEvent	event;
+		bool		measureDontCount = pg_wait_dont_count_active;
 
 		Assert(waitfor);
 
-        // jason: wait for socket write
-        timing_start(PG_WAIT);
+		timing_start(PG_WAIT);
+		if (measureDontCount)
+			timing_start(PG_WAIT_DONT_COUNT);
 
-        ModifyWaitEvent(FeBeWaitSet, FeBeWaitSetSocketPos, waitfor, NULL);
-
+		ModifyWaitEvent(FeBeWaitSet, FeBeWaitSetSocketPos, waitfor, NULL);
 		WaitEventSetWait(FeBeWaitSet, -1 /* no timeout */ , &event, 1,
 						 WAIT_EVENT_CLIENT_WRITE);
-
-        timing_end(PG_WAIT);
+		if (measureDontCount)
+			timing_end(PG_WAIT_DONT_COUNT);
+		timing_end(PG_WAIT);
 
         /* See comments in secure_read. */
 		if (event.events & WL_POSTMASTER_DEATH)

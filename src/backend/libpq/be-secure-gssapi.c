@@ -21,6 +21,7 @@
 #include "libpq/pqformat.h"
 #include "miscadmin.h"
 #include "pgstat.h"
+#include "time_instr.h"
 #include "utils/memutils.h"
 
 
@@ -454,14 +455,16 @@ read_or_wait(Port *port, ssize_t len)
 		 * If it was zero or negative, then we wait on the socket to be
 		 * readable again.
 		 */
-		if (ret <= 0)
-		{
-			WaitLatchOrSocket(MyLatch,
-							  WL_SOCKET_READABLE | WL_EXIT_ON_PM_DEATH,
-							  port->sock, 0, WAIT_EVENT_GSS_OPEN_SERVER);
+			if (ret <= 0)
+			{
+				timing_start(PG_WAIT);
+				WaitLatchOrSocket(MyLatch,
+								  WL_SOCKET_READABLE | WL_EXIT_ON_PM_DEATH,
+								  port->sock, 0, WAIT_EVENT_GSS_OPEN_SERVER);
+				timing_end(PG_WAIT);
 
-			/*
-			 * If we got back zero bytes, and then waited on the socket to be
+				/*
+				 * If we got back zero bytes, and then waited on the socket to be
 			 * readable and got back zero bytes on a second read, then this is
 			 * EOF and the client hung up on us.
 			 *
@@ -673,13 +676,15 @@ secure_open_gssapi(Port *port)
 				}
 
 				/* Wait and retry if we couldn't write yet */
-				if (ret <= 0)
-				{
-					WaitLatchOrSocket(MyLatch,
-									  WL_SOCKET_WRITEABLE | WL_EXIT_ON_PM_DEATH,
-									  port->sock, 0, WAIT_EVENT_GSS_OPEN_SERVER);
-					continue;
-				}
+					if (ret <= 0)
+					{
+						timing_start(PG_WAIT);
+						WaitLatchOrSocket(MyLatch,
+										  WL_SOCKET_WRITEABLE | WL_EXIT_ON_PM_DEATH,
+										  port->sock, 0, WAIT_EVENT_GSS_OPEN_SERVER);
+						timing_end(PG_WAIT);
+						continue;
+					}
 
 				PqGSSSendNext += ret;
 			}
