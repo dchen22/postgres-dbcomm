@@ -1,0 +1,2 @@
+For sending each row:
+- Serialize and send each column individually

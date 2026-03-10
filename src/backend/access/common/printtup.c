@@ -306,7 +306,13 @@ static bool
 printtup(TupleTableSlot *slot, DestReceiver *self)
 {
 	TupleDesc	typeinfo = slot->tts_tupleDescriptor;
-	DR_printtup *myState = (DR_printtup *) self;
+	
+	/*
+	Information about the destination receiver. Like where to write the
+	data (i.e. dst buffer), how to format it (i.e. how to format each attribute)
+	*/
+	DR_printtup *myState = (DR_printtup *) self;	
+
 	MemoryContext oldcontext;
 	StringInfo	buf = &myState->buf;
 	int			natts = typeinfo->natts;
@@ -363,7 +369,9 @@ printtup(TupleTableSlot *slot, DestReceiver *self)
 			/* Text output */
 			char	   *outputstr;
 
+			// Serialize this column 
 			outputstr = OutputFunctionCall(&thisState->finfo, attr);
+			// send it to buf
 			pq_sendcountedtext(buf, outputstr, strlen(outputstr));
 		}
 		else
