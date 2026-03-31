@@ -318,9 +318,9 @@ printtup(TupleTableSlot *slot, DestReceiver *self)
 	int			natts = typeinfo->natts;
 	int			i;
 
-    // jason: timing the printtup (send row) process for the adaptive executor (send half of ReceiveResults())
-    timing_add_stat(Printtup, STAT_TOTAL_ROWS_SENT, 1);
-    timing_start(Printtup);
+    // // jason: timing the printtup (send row) process for the adaptive executor (send half of ReceiveResults())
+    // timing_add_stat(Printtup, STAT_TOTAL_ROWS_SENT, 1);
+    // timing_start(Printtup);
 
     /* Set or update my derived attribute info, if needed */
 	if (myState->attrinfo != typeinfo || myState->nattrs != natts)
@@ -386,10 +386,10 @@ printtup(TupleTableSlot *slot, DestReceiver *self)
 		}
 	}
 
-    // jason: timing the network send part
-    timing_start(Printtup_Net);
+    // // jason: timing the network send part
+    // timing_start(Printtup_Net);
 
-    timing_add_stat(Printtup, STAT_TOTAL_BYTES_SENT, buf->len);
+    // timing_add_stat(Printtup, STAT_TOTAL_BYTES_SENT, buf->len);
 
     pq_endmessage_reuse(buf);
 

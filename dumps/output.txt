@@ -1,0 +1,25 @@
+path=dumps/printtup_binary_dump_test.bin
+header=('PTBDMP1', 1)
+record_counts={'HEAD': 1, 'SCHM': 1, 'ROWD': 100}
+schema_ids=[1]
+row_count=100
+schema 1 attrs=16
+  attnum=1 name=l_orderkey type=integer format=1 send=pg_catalog.int4send(integer) recv=pg_catalog.int4recv(pg_catalog.internal) attlen=4 byval=True typioparam=23
+  attnum=2 name=l_partkey type=integer format=1 send=pg_catalog.int4send(integer) recv=pg_catalog.int4recv(pg_catalog.internal) attlen=4 byval=True typioparam=23
+  attnum=3 name=l_suppkey type=integer format=1 send=pg_catalog.int4send(integer) recv=pg_catalog.int4recv(pg_catalog.internal) attlen=4 byval=True typioparam=23
+  attnum=4 name=l_linenumber type=integer format=1 send=pg_catalog.int4send(integer) recv=pg_catalog.int4recv(pg_catalog.internal) attlen=4 byval=True typioparam=23
+  attnum=5 name=l_quantity type=numeric format=1 send=pg_catalog.numeric_send(numeric) recv=pg_catalog.numeric_recv(pg_catalog.internal,pg_catalog.oid,integer) attlen=-1 byval=False typioparam=1700
+  attnum=6 name=l_extendedprice type=numeric format=1 send=pg_catalog.numeric_send(numeric) recv=pg_catalog.numeric_recv(pg_catalog.internal,pg_catalog.oid,integer) attlen=-1 byval=False typioparam=1700
+  attnum=7 name=l_discount type=numeric format=1 send=pg_catalog.numeric_send(numeric) recv=pg_catalog.numeric_recv(pg_catalog.internal,pg_catalog.oid,integer) attlen=-1 byval=False typioparam=1700
+  attnum=8 name=l_tax type=numeric format=1 send=pg_catalog.numeric_send(numeric) recv=pg_catalog.numeric_recv(pg_catalog.internal,pg_catalog.oid,integer) attlen=-1 byval=False typioparam=1700
+  attnum=9 name=l_returnflag type=character format=1 send=pg_catalog.bpcharsend(character) recv=pg_catalog.bpcharrecv(pg_catalog.internal,pg_catalog.oid,integer) attlen=-1 byval=False typioparam=1042
+  attnum=10 name=l_linestatus type=character format=1 send=pg_catalog.bpcharsend(character) recv=pg_catalog.bpcharrecv(pg_catalog.internal,pg_catalog.oid,integer) attlen=-1 byval=False typioparam=1042
+  attnum=11 name=l_shipdate type=date format=1 send=pg_catalog.date_send(pg_catalog.date) recv=pg_catalog.date_recv(pg_catalog.internal) attlen=4 byval=True typioparam=1082
+  attnum=12 name=l_commitdate type=date format=1 send=pg_catalog.date_send(pg_catalog.date) recv=pg_catalog.date_recv(pg_catalog.internal) attlen=4 byval=True typioparam=1082
+  attnum=13 name=l_receiptdate type=date format=1 send=pg_catalog.date_send(pg_catalog.date) recv=pg_catalog.date_recv(pg_catalog.internal) attlen=4 byval=True typioparam=1082
+  attnum=14 name=l_shipinstruct type=character format=1 send=pg_catalog.bpcharsend(character) recv=pg_catalog.bpcharrecv(pg_catalog.internal,pg_catalog.oid,integer) attlen=-1 byval=False typioparam=1042
+  attnum=15 name=l_shipmode type=character format=1 send=pg_catalog.bpcharsend(character) recv=pg_catalog.bpcharrecv(pg_catalog.internal,pg_catalog.oid,integer) attlen=-1 byval=False typioparam=1042
+  attnum=16 name=l_comment type=character varying format=1 send=pg_catalog.varcharsend(character varying) recv=pg_catalog.varcharrecv(pg_catalog.internal,pg_catalog.oid,integer) attlen=-1 byval=False typioparam=1043
+row schema=1 row_id=1 natts=16 row_payload_len=198 norm_first5=[4, 4, 4, 4, 8] ser_first5=[4, 4, 4, 4, 10]
+row schema=1 row_id=2 natts=16 row_payload_len=209 norm_first5=[4, 4, 4, 4, 8] ser_first5=[4, 4, 4, 4, 10]
+row schema=1 row_id=3 natts=16 row_payload_len=204 norm_first5=[4, 4, 4, 4, 8] ser_first5=[4, 4, 4, 4, 10]
